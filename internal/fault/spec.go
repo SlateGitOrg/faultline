@@ -88,13 +88,15 @@ type HTTPMatch struct {
 // and for experiment files; Validate rejects fields that do not belong to
 // the declared type's kind.
 type Spec struct {
-	ID          string    `json:"id,omitempty"`
-	Type        Type      `json:"type"`
-	Direction   Direction `json:"direction,omitempty"`
-	Probability float64   `json:"probability,omitempty"`
-	TTL         Duration  `json:"ttl,omitempty"`
-	MaxAffected int       `json:"max_affected,omitempty"`
-	Sources     []string  `json:"sources,omitempty"`
+	ID        string    `json:"id,omitempty"`
+	Type      Type      `json:"type"`
+	Direction Direction `json:"direction,omitempty"`
+	// Probability is a pointer so that an explicit 0 ("never affect
+	// traffic") is distinguishable from an omitted field (default 1).
+	Probability *float64 `json:"probability,omitempty"`
+	TTL         Duration `json:"ttl,omitempty"`
+	MaxAffected int      `json:"max_affected,omitempty"`
+	Sources     []string `json:"sources,omitempty"`
 
 	Latency    Duration `json:"latency,omitempty"`
 	Jitter     Duration `json:"jitter,omitempty"`
@@ -107,9 +109,36 @@ type Spec struct {
 	Body            string            `json:"body,omitempty"`
 	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
 	Mode            string            `json:"mode,omitempty"`
-	Rate            float64           `json:"rate,omitempty"`
+	// Rate is a pointer so that an explicit 0 is rejected instead of being
+	// mistaken for "omitted" (default 0.01).
+	Rate *float64 `json:"rate,omitempty"`
 
 	sources []netip.Prefix
+}
+
+// DefaultCorruptRate is the per-byte flip probability of a corrupt fault
+// whose rate is omitted.
+const DefaultCorruptRate = 0.01
+
+// Float returns a pointer to v, for the optional Probability and Rate fields.
+func Float(v float64) *float64 { return &v }
+
+// Chance is the probability that the fault affects a connection or request:
+// Probability, or 1 when it was omitted.
+func (s *Spec) Chance() float64 {
+	if s.Probability == nil {
+		return 1
+	}
+	return *s.Probability
+}
+
+// FlipRate is the per-byte corruption probability: Rate, or
+// DefaultCorruptRate when it was omitted.
+func (s *Spec) FlipRate() float64 {
+	if s.Rate == nil {
+		return DefaultCorruptRate
+	}
+	return *s.Rate
 }
 
 // KindOf reports which proxy kind a fault type belongs to.
@@ -124,8 +153,10 @@ func KindOf(t Type) (Kind, bool) {
 }
 
 // Validate checks the spec against a proxy kind and fills in defaults
-// (probability 1, default directions, parsed source prefixes). It must be
-// called before a spec is activated.
+// (probability 1 when omitted, default directions, parsed source
+// prefixes). An explicit probability of 0 is kept: the fault is registered
+// and audited but never affects traffic. It must be called before a spec is
+// activated.
 func (s *Spec) Validate(kind Kind) error {
 	k, ok := KindOf(s.Type)
 	if !ok {
@@ -134,11 +165,11 @@ func (s *Spec) Validate(kind Kind) error {
 	if k != kind {
 		return fmt.Errorf("fault type %q is a %s fault and cannot be applied to a %s proxy", s.Type, k, kind)
 	}
-	if s.Probability < 0 || s.Probability > 1 {
-		return fmt.Errorf("probability must be within [0,1], got %v", s.Probability)
+	if s.Probability == nil {
+		s.Probability = Float(1)
 	}
-	if s.Probability == 0 {
-		s.Probability = 1
+	if p := *s.Probability; !(p >= 0 && p <= 1) {
+		return fmt.Errorf("probability must be within [0,1], got %v", p)
 	}
 	if s.TTL < 0 {
 		return errors.New("ttl must not be negative")
@@ -182,7 +213,7 @@ func parsePrefix(src string) (netip.Prefix, error) {
 }
 
 func (s *Spec) validateTCP() error {
-	if s.Match != nil || s.Status != 0 || s.Body != "" || len(s.ResponseHeaders) > 0 || s.Mode != "" || s.Rate != 0 {
+	if s.Match != nil || s.Status != 0 || s.Body != "" || len(s.ResponseHeaders) > 0 || s.Mode != "" || s.Rate != nil {
 		return fmt.Errorf("%s fault does not accept HTTP fields (match, status, body, response_headers, mode, rate)", s.Type)
 	}
 	switch s.Direction {
@@ -235,13 +266,16 @@ func (s *Spec) validateHTTP() error {
 		switch s.Mode {
 		case "", CorruptFlip:
 			s.Mode = CorruptFlip
-			if s.Rate == 0 {
-				s.Rate = 0.01
+			if s.Rate == nil {
+				s.Rate = Float(DefaultCorruptRate)
 			}
-			if s.Rate < 0 || s.Rate > 1 {
-				return fmt.Errorf("corrupt rate must be within (0,1], got %v", s.Rate)
+			if r := *s.Rate; !(r > 0 && r <= 1) {
+				return fmt.Errorf("corrupt rate must be within (0,1], got %v", r)
 			}
 		case CorruptTruncate:
+			if s.Rate != nil {
+				return errors.New("corrupt rate only applies to mode flip")
+			}
 			if s.AfterBytes < 0 {
 				return errors.New("after_bytes must not be negative")
 			}
@@ -376,15 +410,15 @@ func (f *Spec) Describe() string {
 		switch {
 		case f.Mode == CorruptTruncate:
 			s += fmt.Sprintf(" after %d B", f.AfterBytes)
-		case f.Rate > 0:
-			s += fmt.Sprintf(" rate=%g", f.Rate)
+		case f.Rate != nil:
+			s += fmt.Sprintf(" rate=%g", *f.Rate)
 		}
 	}
 	if f.Direction != "" && f.Type != Reset {
 		s += " " + string(f.Direction)
 	}
-	if f.Probability > 0 && f.Probability < 1 {
-		s += fmt.Sprintf(" p=%g", f.Probability)
+	if f.Probability != nil && *f.Probability < 1 {
+		s += fmt.Sprintf(" p=%g", *f.Probability)
 	}
 	if f.Match != nil {
 		s += " scoped"

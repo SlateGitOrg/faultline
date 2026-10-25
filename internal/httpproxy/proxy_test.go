@@ -160,7 +160,7 @@ func TestStatusInjection(t *testing.T) {
 func TestStatusProbability(t *testing.T) {
 	u := startUpstream(t)
 	p, set := startProxy(t, u.srv.URL, 9)
-	addFault(t, set, fault.Spec{Type: fault.Status, Status: 500, Probability: 0.3})
+	addFault(t, set, fault.Spec{Type: fault.Status, Status: 500, Probability: fault.Float(0.3)})
 	fails := 0
 	const n = 300
 	for range n {
@@ -218,7 +218,7 @@ func TestAbort(t *testing.T) {
 func TestCorruptFlipEveryByte(t *testing.T) {
 	u := startUpstream(t)
 	p, set := startProxy(t, u.srv.URL, 1)
-	addFault(t, set, fault.Spec{Type: fault.Corrupt, Rate: 1})
+	addFault(t, set, fault.Spec{Type: fault.Corrupt, Rate: fault.Float(1)})
 	_, body, err := get(t, "http://"+p.Addr()+"/big", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -239,7 +239,7 @@ func TestCorruptFlipEveryByte(t *testing.T) {
 func TestCorruptFlipRate(t *testing.T) {
 	u := startUpstream(t)
 	p, set := startProxy(t, u.srv.URL, 5)
-	addFault(t, set, fault.Spec{Type: fault.Corrupt, Rate: 0.01})
+	addFault(t, set, fault.Spec{Type: fault.Corrupt, Rate: fault.Float(0.01)})
 	_, body, err := get(t, "http://"+p.Addr()+"/big", nil)
 	if err != nil {
 		t.Fatal(err)

@@ -77,8 +77,10 @@ safety:
 
 ## Fault types
 
-Common fields: `id` (default generated), `probability` (0–1, default 1),
-`max_affected` (concurrent cap, default none), `sources` (client IPs/CIDRs).
+Common fields: `id` (default generated), `probability` (0–1; omitted means
+1; an explicit `0` is kept, so the fault is registered and audited but never
+affects traffic), `max_affected` (concurrent cap, default none), `sources`
+(client IPs/CIDRs).
 
 | Type | Kind | Fields | Effect |
 |---|---|---|---|
@@ -91,7 +93,7 @@ Common fields: `id` (default generated), `probability` (0–1, default 1),
 | `delay` | http | `latency`, `jitter`, `match` | Holds the request before forwarding. |
 | `status` | http | `status`, `body`, `response_headers`, `match` | Answers without contacting the upstream. |
 | `abort` | http | `match` | Drops the client connection without a response. |
-| `corrupt` | http | `mode: flip` + `rate` (default 0.01), or `mode: truncate` + `after_bytes`; `match` | Mangles the response body. |
+| `corrupt` | http | `mode: flip` + `rate` (in (0,1]; omitted means 0.01, an explicit 0 is rejected), or `mode: truncate` + `after_bytes`; `match` | Mangles the response body. |
 
 HTTP `match`: `{methods: [GET, POST], path_prefix: /api, headers: {X-Canary: "1"}}`.
 

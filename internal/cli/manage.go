@@ -196,6 +196,19 @@ func splitList(s string) []string {
 	return out
 }
 
+// optionalFloat sets an optional float field only when its flag is given,
+// so an explicit 0 is passed through instead of meaning "use the default".
+func optionalFloat(dst **float64) func(string) error {
+	return func(v string) error {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return err
+		}
+		*dst = fault.Float(f)
+		return nil
+	}
+}
+
 // faultFlags binds a fault.Spec to flags and returns a finaliser that
 // applies the list- and map-valued ones.
 func faultFlags(fs *flag.FlagSet, s *fault.Spec) func() {
@@ -208,7 +221,7 @@ func faultFlags(fs *flag.FlagSet, s *fault.Spec) func() {
 		s.Direction = fault.Direction(v)
 		return nil
 	})
-	fs.Float64Var(&s.Probability, "probability", 0, "chance a connection/request is affected, (0,1]; default 1")
+	fs.Func("probability", "chance a connection/request is affected, [0,1]; default 1 (0 registers the fault but never applies it)", optionalFloat(&s.Probability))
 	fs.Var(durationFlag{&s.TTL}, "ttl", "fault lifetime (capped by the server's --max-ttl)")
 	fs.IntVar(&s.MaxAffected, "max-affected", 0, "cap on connections/requests affected at once (0: no cap)")
 	sources := fs.String("source", "", "comma separated client IPs/CIDRs the fault is limited to")
@@ -222,7 +235,7 @@ func faultFlags(fs *flag.FlagSet, s *fault.Spec) func() {
 	respHeaders := kvFlag{}
 	fs.Var(respHeaders, "header", "response header for injected statuses, KEY=VALUE (repeatable)")
 	fs.StringVar(&s.Mode, "mode", "", "corrupt mode: flip|truncate")
-	fs.Float64Var(&s.Rate, "rate", 0, "corrupt flip rate per byte (default 0.01)")
+	fs.Func("rate", "corrupt flip rate per byte, (0,1] (default 0.01)", optionalFloat(&s.Rate))
 	methods := fs.String("match-method", "", "http: comma separated methods to affect")
 	path := fs.String("match-path", "", "http: path prefix to affect")
 	matchHeaders := kvFlag{}

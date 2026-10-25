@@ -151,6 +151,19 @@ func TestServeTokenAndListenErrors(t *testing.T) {
 	}
 }
 
+func TestAllowPublicListen(t *testing.T) {
+	vars := daemon(t, "--allow-public-listen")
+	pricing, err := sample.StartPricing("127.0.0.1:0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pricing.Close()
+	r := invoke(t, vars, "proxy", "create", "public", "--kind", "tcp", "--listen", "0.0.0.0:0", "--upstream", pricing.Addr())
+	if r.code != 0 || !strings.Contains(r.stdout, "listening on") {
+		t.Fatalf("--allow-public-listen: %+v", r)
+	}
+}
+
 func TestProxyAndFaultLifecycle(t *testing.T) {
 	vars := daemon(t, "--max-ttl", "1m")
 	pricing, err := sample.StartPricing("127.0.0.1:0", nil)
@@ -184,6 +197,23 @@ func TestProxyAndFaultLifecycle(t *testing.T) {
 	}
 	if r := invoke(t, vars, "fault", "add", "edge", "--json", `{"id":"brk","type":"abort","probability":0.1}`); r.code != 0 {
 		t.Fatalf("add json: %+v", r)
+	}
+	// An explicit --probability 0 is kept (registered, never applied), not
+	// widened to the default 1; an explicit --rate 0 is rejected.
+	if r := invoke(t, vars, "fault", "add", "pricing", "--id", "off", "--type", "reset", "--probability", "0"); r.code != 0 || !strings.Contains(r.stdout, "fault off on pricing: reset p=0") {
+		t.Fatalf("probability 0: %+v", r)
+	}
+	if r := invoke(t, vars, "fault", "rm", "pricing", "off"); r.code != 0 {
+		t.Fatalf("rm off: %+v", r)
+	}
+	if r := invoke(t, vars, "fault", "add", "edge", "--type", "corrupt", "--rate", "0"); r.code != exitError || !strings.Contains(r.stderr, "corrupt rate") {
+		t.Fatalf("rate 0: %+v", r)
+	}
+	if r := invoke(t, vars, "fault", "add", "edge", "--type", "abort", "--probability", "half"); r.code != exitUsage {
+		t.Fatalf("bad probability flag: %+v", r)
+	}
+	if r := invoke(t, vars, "proxy", "create", "public", "--kind", "tcp", "--listen", "0.0.0.0:0", "--upstream", pricing.Addr()); r.code != exitError || !strings.Contains(r.stderr, "--allow-public-listen") {
+		t.Fatalf("public listen must be refused by default: %+v", r)
 	}
 	if r := invoke(t, vars, "fault", "add", "pricing", "--type", "latency", "--ttl", "2h", "--latency", "1ms"); r.code != exitError || !strings.Contains(r.stderr, "403") {
 		t.Fatalf("ttl policy: %+v", r)

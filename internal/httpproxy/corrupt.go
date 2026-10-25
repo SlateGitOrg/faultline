@@ -38,7 +38,7 @@ func newCorruptBody(src io.ReadCloser, a *fault.Active, rng *fault.RNG) io.ReadC
 
 // gap draws the number of untouched bytes before the next flip.
 func (c *corruptBody) gap() int64 {
-	p := c.spec.Rate
+	p := c.spec.FlipRate()
 	if p >= 1 {
 		return 0
 	}

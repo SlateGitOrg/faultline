@@ -156,7 +156,7 @@ func (p *Proxy) Close() error {
 func (p *Proxy) selectFaults(r *http.Request) []*fault.Active {
 	var out []*fault.Active
 	for _, a := range p.cfg.Faults.Live(time.Now()) {
-		if a.MatchesRequest(r) && p.cfg.RNG.Chance(a.Probability) && a.Acquire() {
+		if a.MatchesRequest(r) && p.cfg.RNG.Chance(a.Chance()) && a.Acquire() {
 			a.MarkApplied()
 			out = append(out, a)
 		}

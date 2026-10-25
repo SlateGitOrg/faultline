@@ -48,7 +48,7 @@ func TestValidateDefaultsAndErrors(t *testing.T) {
 	}{
 		{"unknown type", KindTCP, Spec{Type: "nope"}, "unknown fault type"},
 		{"wrong kind", KindHTTP, Spec{Type: Latency, Latency: Duration(time.Millisecond)}, "cannot be applied"},
-		{"bad probability", KindTCP, Spec{Type: Reset, Probability: 1.5}, "probability"},
+		{"bad probability", KindTCP, Spec{Type: Reset, Probability: Float(1.5)}, "probability"},
 		{"negative ttl", KindTCP, Spec{Type: Reset, TTL: -1}, "ttl"},
 		{"negative max affected", KindTCP, Spec{Type: Reset, MaxAffected: -1}, "max_affected"},
 		{"negative latency", KindTCP, Spec{Type: Latency, Latency: -1}, "must not be negative"},
@@ -65,7 +65,7 @@ func TestValidateDefaultsAndErrors(t *testing.T) {
 		{"empty delay", KindHTTP, Spec{Type: Delay}, "needs latency"},
 		{"bad status", KindHTTP, Spec{Type: Status, Status: 42}, "HTTP status"},
 		{"bad mode", KindHTTP, Spec{Type: Corrupt, Mode: "melt"}, "corrupt mode"},
-		{"bad rate", KindHTTP, Spec{Type: Corrupt, Rate: 2}, "corrupt rate"},
+		{"bad rate", KindHTTP, Spec{Type: Corrupt, Rate: Float(2)}, "corrupt rate"},
 		{"bad truncate", KindHTTP, Spec{Type: Corrupt, Mode: CorruptTruncate, AfterBytes: -2}, "after_bytes"},
 		{"bad path", KindHTTP, Spec{Type: Abort, Match: &HTTPMatch{PathPrefix: "x"}}, "path_prefix"},
 	}
@@ -82,7 +82,7 @@ func TestValidateDefaultsAndErrors(t *testing.T) {
 	if err := s.Validate(KindTCP); err != nil {
 		t.Fatal(err)
 	}
-	if s.Probability != 1 || s.Direction != Downstream {
+	if s.Probability == nil || *s.Probability != 1 || s.Chance() != 1 || s.Direction != Downstream {
 		t.Fatalf("defaults not applied: %+v", s)
 	}
 	sc := Spec{Type: SlowClose, Delay: Duration(time.Millisecond)}
@@ -90,7 +90,7 @@ func TestValidateDefaultsAndErrors(t *testing.T) {
 		t.Fatalf("slow close default direction: %v %v", sc.Direction, err)
 	}
 	c := Spec{Type: Corrupt}
-	if err := c.Validate(KindHTTP); err != nil || c.Mode != CorruptFlip || c.Rate != 0.01 {
+	if err := c.Validate(KindHTTP); err != nil || c.Mode != CorruptFlip || c.Rate == nil || *c.Rate != 0.01 || c.FlipRate() != 0.01 {
 		t.Fatalf("corrupt defaults: %+v %v", c, err)
 	}
 	m := Spec{Type: Status, Status: 503, Match: &HTTPMatch{Methods: []string{"get"}}}
@@ -308,8 +308,70 @@ func TestSetLifecycle(t *testing.T) {
 	}
 }
 
+// An explicit probability of 0 must be honoured (the fault never applies),
+// not silently widened to 1 as "omitted" would be; an explicit corrupt rate
+// of 0 must be rejected, not widened to the 0.01 default.
+func TestExplicitZeroIsNotOmitted(t *testing.T) {
+	for _, kind := range []Kind{KindTCP, KindHTTP} {
+		s := Spec{Type: Reset, Probability: Float(0)}
+		if kind == KindHTTP {
+			s = Spec{Type: Status, Status: 503, Probability: Float(0)}
+		}
+		if err := s.Validate(kind); err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		if s.Probability == nil || *s.Probability != 0 || s.Chance() != 0 {
+			t.Fatalf("%s: explicit probability 0 became %v", kind, s.Chance())
+		}
+		a := NewActive(s, time.Now(), 0)
+		d := NewDecider(NewRNG(1), nil)
+		for range 1000 {
+			if d.Applies(a) {
+				t.Fatalf("%s: a probability-0 fault applied", kind)
+			}
+		}
+		if !strings.Contains(s.Describe(), "p=0") {
+			t.Fatalf("describe must show p=0: %q", s.Describe())
+		}
+	}
+	// JSON round trip keeps the explicit 0 (omitempty skips only nil) and
+	// an omitted field still defaults to 1.
+	var zero, omitted Spec
+	if err := json.Unmarshal([]byte(`{"type":"status","status":503,"probability":0}`), &zero); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"type":"status","status":503}`), &omitted); err != nil {
+		t.Fatal(err)
+	}
+	if err := zero.Validate(KindHTTP); err != nil || zero.Chance() != 0 {
+		t.Fatalf("decoded probability 0: %v %v", zero.Chance(), err)
+	}
+	if b, _ := json.Marshal(zero); !strings.Contains(string(b), `"probability":0`) {
+		t.Fatalf("explicit 0 dropped on encode: %s", b)
+	}
+	if err := omitted.Validate(KindHTTP); err != nil || omitted.Chance() != 1 {
+		t.Fatalf("omitted probability: %v %v", omitted.Chance(), err)
+	}
+	if (&Spec{}).Chance() != 1 || (&Spec{}).FlipRate() != DefaultCorruptRate {
+		t.Fatal("unvalidated defaults")
+	}
+	for _, bad := range []float64{0, -0.1, 1.5} {
+		c := Spec{Type: Corrupt, Rate: Float(bad)}
+		if err := c.Validate(KindHTTP); err == nil || !strings.Contains(err.Error(), "corrupt rate") {
+			t.Fatalf("rate %v: want rejection, got %v (rate now %v)", bad, err, c.FlipRate())
+		}
+	}
+	tr := Spec{Type: Corrupt, Mode: CorruptTruncate, Rate: Float(0.5)}
+	if err := tr.Validate(KindHTTP); err == nil {
+		t.Fatal("rate with truncate mode must be rejected")
+	}
+	if err := (&Spec{Type: Reset, Probability: Float(-0.5)}).Validate(KindTCP); err == nil {
+		t.Fatal("negative probability accepted")
+	}
+}
+
 func TestMaxAffectedAndDecider(t *testing.T) {
-	a := NewActive(Spec{ID: "x", Type: Reset, Probability: 1, MaxAffected: 2}, time.Now(), 0)
+	a := NewActive(Spec{ID: "x", Type: Reset, Probability: Float(1), MaxAffected: 2}, time.Now(), 0)
 	rng := NewRNG(1)
 	d1, d2, d3 := NewDecider(rng, nil), NewDecider(rng, nil), NewDecider(rng, nil)
 	if !d1.Applies(a) || !d2.Applies(a) {
@@ -330,10 +392,10 @@ func TestMaxAffectedAndDecider(t *testing.T) {
 		t.Fatal("slot freed by release should be reusable")
 	}
 	scoped := NewDecider(rng, func(*Active) bool { return false })
-	if scoped.Applies(NewActive(Spec{ID: "y", Probability: 1}, time.Now(), 0)) {
+	if scoped.Applies(NewActive(Spec{ID: "y", Probability: Float(1)}, time.Now(), 0)) {
 		t.Fatal("accept=false must veto")
 	}
-	never := NewActive(Spec{ID: "z", Probability: 0}, time.Now(), 0)
+	never := NewActive(Spec{ID: "z", Probability: Float(0)}, time.Now(), 0)
 	if NewDecider(rng, nil).Applies(never) {
 		t.Fatal("zero probability (not normalised) must not apply")
 	}
@@ -364,11 +426,11 @@ func TestDescribe(t *testing.T) {
 	cases := map[string]Spec{
 		"latency 10ms±2ms downstream": {Type: Latency, Latency: Duration(10 * time.Millisecond), Jitter: Duration(2 * time.Millisecond), Direction: Downstream},
 		"bandwidth 100 B/s":           {Type: Bandwidth, RateBPS: 100},
-		"status 503 p=0.5 scoped":     {Type: Status, Status: 503, Probability: 0.5, Match: &HTTPMatch{}},
+		"status 503 p=0.5 scoped":     {Type: Status, Status: 503, Probability: Float(0.5), Match: &HTTPMatch{}},
 		"close after 10 B":            {Type: Close, AfterBytes: 10},
 		"reset after 1s":              {Type: Reset, Delay: Duration(time.Second)},
 		"corrupt flip":                {Type: Corrupt, Mode: "flip"},
-		"corrupt flip rate=0.01":      {Type: Corrupt, Mode: "flip", Rate: 0.01},
+		"corrupt flip rate=0.01":      {Type: Corrupt, Mode: "flip", Rate: Float(0.01)},
 		"corrupt truncate after 64 B": {Type: Corrupt, Mode: "truncate", AfterBytes: 64},
 		"reset":                       {Type: Reset, Direction: Downstream},
 		"abort":                       {Type: Abort},

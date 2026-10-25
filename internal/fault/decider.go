@@ -30,7 +30,7 @@ func (d *Decider) Applies(a *Active) bool {
 	if v, ok := d.decided[a]; ok {
 		return v
 	}
-	v := (d.accept == nil || d.accept(a)) && d.rng.Chance(a.Probability) && a.Acquire()
+	v := (d.accept == nil || d.accept(a)) && d.rng.Chance(a.Chance()) && a.Acquire()
 	if v {
 		d.acquired = append(d.acquired, a)
 		a.MarkApplied()

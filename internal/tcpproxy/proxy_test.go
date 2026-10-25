@@ -314,7 +314,7 @@ func TestSlowClose(t *testing.T) {
 
 func TestProbabilityIsPerConnection(t *testing.T) {
 	p, set := startProxy(t, startEcho(t), 42)
-	addFault(t, set, fault.Spec{Type: fault.Close, Probability: 0.5})
+	addFault(t, set, fault.Spec{Type: fault.Close, Probability: fault.Float(0.5)})
 	closed := 0
 	const n = 200
 	for range n {
@@ -422,7 +422,7 @@ func TestPacerRate(t *testing.T) {
 
 func TestResetProbabilityAndCap(t *testing.T) {
 	p, set := startProxy(t, startEcho(t), 42)
-	addFault(t, set, fault.Spec{Type: fault.Reset, Probability: 0.3, MaxAffected: 2})
+	addFault(t, set, fault.Spec{Type: fault.Reset, Probability: fault.Float(0.3), MaxAffected: 2})
 	reset := 0
 	const n = 200
 	for range n {
