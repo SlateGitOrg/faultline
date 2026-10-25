@@ -16,8 +16,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # golangci-lint must understand the export data of the Go toolchain that
+      # setup-go installs (latest 1.27.x). v2.13.x cannot read the version-5
+      # export data written by go1.27.3; v2.14.0 (golang.org/x/tools 0.50) can.
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
       - name: make check (format, vet, lint, race tests, coverage gate)
         run: make check
 
