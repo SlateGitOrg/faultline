@@ -365,7 +365,7 @@ func (e *Engine) AddFault(proxy string, spec fault.Spec) (fault.Info, error) {
 		return reject(fmt.Errorf("%w: engaged while adding", ErrKillSwitch))
 	}
 	e.log.Info("fault added", "proxy", proxy, "fault", a.ID, "type", a.Type, "ttl", ttl)
-	e.audit.Record(Event{Action: "fault.add", Proxy: proxy, Fault: a.ID, Detail: describe(a.Spec)})
+	e.audit.Record(Event{Action: "fault.add", Proxy: proxy, Fault: a.ID, Detail: a.Describe()})
 	return a.Info(), nil
 }
 
@@ -446,23 +446,10 @@ func (e *Engine) Close() error {
 	entries := e.proxies
 	e.proxies = make(map[string]*entry)
 	e.mu.Unlock()
-	var errs []error
+	errs := make([]error, 0, len(entries))
 	for _, en := range entries {
 		en.set.Clear()
 		errs = append(errs, en.close())
 	}
 	return errors.Join(errs...)
-}
-
-func describe(s fault.Spec) string {
-	switch s.Type {
-	case fault.Latency, fault.Delay:
-		return fmt.Sprintf("%s %s±%s p=%g", s.Type, s.Latency, s.Jitter, s.Probability)
-	case fault.Bandwidth:
-		return fmt.Sprintf("%s %dB/s p=%g", s.Type, s.RateBPS, s.Probability)
-	case fault.Status:
-		return fmt.Sprintf("%s %d p=%g", s.Type, s.Status, s.Probability)
-	default:
-		return fmt.Sprintf("%s p=%g", s.Type, s.Probability)
-	}
 }

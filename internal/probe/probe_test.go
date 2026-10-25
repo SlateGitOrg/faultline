@@ -185,7 +185,7 @@ func TestValidate(t *testing.T) {
 		}
 	}
 	s := Spec{Name: "d", HTTP: &HTTPSpec{URL: "https://x"}}
-	if err := s.Validate(); err != nil || s.Timeout.D() != DefaultTimeout || s.HTTP.Method != "GET" {
+	if err := s.Validate(); err != nil || s.Timeout.D() != DefaultTimeout || s.HTTP.Method != http.MethodGet {
 		t.Fatalf("defaults: %+v %v", s, err)
 	}
 }

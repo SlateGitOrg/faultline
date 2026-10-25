@@ -346,11 +346,12 @@ func (x *run) method(parent context.Context) report.Phase {
 		}()
 	}
 	wg.Wait()
-	if ctx.Err() == nil {
+	switch {
+	case ctx.Err() == nil:
 		x.event("method", "fault schedule completed")
-	} else if parent.Err() != nil {
+	case parent.Err() != nil:
 		abort("interrupted", nil)
-	} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		abort(fmt.Sprintf("safety.max_duration %s exceeded", spec.Safety.MaxDuration), nil)
 	}
 	cancel()
@@ -438,7 +439,7 @@ func (x *run) runStep(ctx context.Context, start time.Time, st Step, abort func(
 			return
 		}
 		f.TTL = fault.Duration(ttl)
-		in := &report.Injection{Step: st.Name, Proxy: st.Proxy, Type: string(f.Type), Detail: describe(f), InjectedAt: time.Now()}
+		in := &report.Injection{Step: st.Name, Proxy: st.Proxy, Type: string(f.Type), Detail: f.Describe(), InjectedAt: time.Now()}
 		// The call itself is not cancelled by an abort: a fault the server
 		// installs must be known to the runner so rollback removes it.
 		callCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
@@ -599,37 +600,4 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 	case <-ctx.Done():
 		return false
 	}
-}
-
-func describe(f fault.Spec) string {
-	s := string(f.Type)
-	switch f.Type {
-	case fault.Latency, fault.Delay:
-		s += " " + f.Latency.String()
-		if f.Jitter > 0 {
-			s += "±" + f.Jitter.String()
-		}
-	case fault.Bandwidth:
-		s += fmt.Sprintf(" %d B/s", f.RateBPS)
-	case fault.Status:
-		s += fmt.Sprintf(" %d", f.Status)
-	case fault.Close:
-		s += fmt.Sprintf(" after %d B", f.AfterBytes)
-	case fault.SlowClose, fault.Reset:
-		if f.Delay > 0 {
-			s += " after " + f.Delay.String()
-		}
-	case fault.Corrupt:
-		s += " " + f.Mode
-	}
-	if f.Direction != "" {
-		s += " " + string(f.Direction)
-	}
-	if f.Probability > 0 && f.Probability < 1 {
-		s += fmt.Sprintf(" p=%g", f.Probability)
-	}
-	if f.Match != nil {
-		s += " scoped"
-	}
-	return s
 }

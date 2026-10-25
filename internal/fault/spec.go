@@ -350,3 +350,38 @@ func (s *Spec) MatchesRequest(r *http.Request) bool {
 	}
 	return true
 }
+
+// Describe renders the spec compactly for logs, audit entries and reports,
+// e.g. "latency 100ms±10ms downstream p=0.5".
+func (f *Spec) Describe() string {
+	s := string(f.Type)
+	switch f.Type {
+	case Latency, Delay:
+		s += " " + f.Latency.String()
+		if f.Jitter > 0 {
+			s += "±" + f.Jitter.String()
+		}
+	case Bandwidth:
+		s += fmt.Sprintf(" %d B/s", f.RateBPS)
+	case Status:
+		s += fmt.Sprintf(" %d", f.Status)
+	case Close:
+		s += fmt.Sprintf(" after %d B", f.AfterBytes)
+	case SlowClose, Reset:
+		if f.Delay > 0 {
+			s += " after " + f.Delay.String()
+		}
+	case Corrupt:
+		s += " " + f.Mode
+	}
+	if f.Direction != "" {
+		s += " " + string(f.Direction)
+	}
+	if f.Probability > 0 && f.Probability < 1 {
+		s += fmt.Sprintf(" p=%g", f.Probability)
+	}
+	if f.Match != nil {
+		s += " scoped"
+	}
+	return s
+}

@@ -100,7 +100,7 @@ func TestPassthrough(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != 200 || string(body) != "127.0.0.1" || resp.Header.Get(FaultHeader) != "" {
+	if resp.StatusCode != http.StatusOK || string(body) != "127.0.0.1" || resp.Header.Get(FaultHeader) != "" {
 		t.Fatalf("status=%d body=%q fault=%q", resp.StatusCode, body, resp.Header.Get(FaultHeader))
 	}
 	if p.Stats().Requests != 1 || p.Stats().Faulted != 0 || p.Upstream() != u.srv.URL || p.Faults() == nil {
@@ -143,7 +143,7 @@ func TestStatusInjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != 503 || string(body) != "nope" || resp.Header.Get("Retry-After") != "1" || resp.Header.Get(FaultHeader) != "boom" {
+	if resp.StatusCode != http.StatusServiceUnavailable || string(body) != "nope" || resp.Header.Get("Retry-After") != "1" || resp.Header.Get(FaultHeader) != "boom" {
 		t.Fatalf("status=%d body=%q headers=%v", resp.StatusCode, body, resp.Header)
 	}
 	if u.hits.Load() != 0 {
@@ -168,7 +168,7 @@ func TestStatusProbability(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if resp.StatusCode == 500 {
+		if resp.StatusCode == http.StatusInternalServerError {
 			fails++
 		}
 	}
@@ -280,7 +280,7 @@ func TestUpstreamDown(t *testing.T) {
 	_ = ln.Close()
 	p, _ := startProxy(t, dead, 1)
 	resp, _, err := get(t, "http://"+p.Addr()+"/", nil)
-	if err != nil || resp.StatusCode != 502 || p.Stats().UpstreamErrors != 1 {
+	if err != nil || resp.StatusCode != http.StatusBadGateway || p.Stats().UpstreamErrors != 1 {
 		t.Fatalf("resp=%v err=%v", resp, err)
 	}
 }

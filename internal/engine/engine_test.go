@@ -275,16 +275,6 @@ func TestAuditRing(t *testing.T) {
 	}
 }
 
-func TestDescribe(t *testing.T) {
-	for _, s := range []fault.Spec{
-		{Type: fault.Latency}, {Type: fault.Bandwidth, RateBPS: 10}, {Type: fault.Status, Status: 500}, {Type: fault.Reset},
-	} {
-		if d := describe(s); !strings.HasPrefix(d, string(s.Type)) {
-			t.Fatalf("describe %q", d)
-		}
-	}
-}
-
 func TestSystemResolver(t *testing.T) {
 	addrs, err := systemResolver{}.LookupNetIP(t.Context(), "ip", "localhost")
 	if err != nil || len(addrs) == 0 {

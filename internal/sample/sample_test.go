@@ -57,7 +57,7 @@ func getJSON(t *testing.T, url string) (int, map[string]any) {
 func TestCatalogEndToEnd(t *testing.T) {
 	_, c := start(t, 0)
 	code, body := getJSON(t, "http://"+c.Addr()+"/products")
-	if code != 200 {
+	if code != http.StatusOK {
 		t.Fatalf("status %d %v", code, body)
 	}
 	products := body["products"].([]any)
@@ -69,14 +69,14 @@ func TestCatalogEndToEnd(t *testing.T) {
 		t.Fatalf("first product %v", first)
 	}
 	code, body = getJSON(t, "http://"+c.Addr()+"/products/magnet")
-	if code != 200 || len(body["products"].([]any)) != 1 {
+	if code != http.StatusOK || len(body["products"].([]any)) != 1 {
 		t.Fatalf("single: %d %v", code, body)
 	}
 	if code, _ := getJSON(t, "http://"+c.Addr()+"/products/unobtainium"); code != 404 {
 		t.Fatalf("unknown sku status %d", code)
 	}
 	resp, err := http.Get("http://" + c.Addr() + "/healthz") //nolint:noctx // test
-	if err != nil || resp.StatusCode != 200 {
+	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("healthz %v %v", resp, err)
 	}
 	_ = resp.Body.Close()
@@ -86,7 +86,7 @@ func TestCatalogPricingDown(t *testing.T) {
 	p, c := start(t, 100*time.Millisecond)
 	_ = p.Close()
 	code, body := getJSON(t, "http://"+c.Addr()+"/products")
-	if code != 503 || !strings.Contains(fmt.Sprint(body["error"]), "pricing unavailable") {
+	if code != http.StatusServiceUnavailable || !strings.Contains(fmt.Sprint(body["error"]), "pricing unavailable") {
 		t.Fatalf("got %d %v", code, body)
 	}
 }
@@ -116,7 +116,7 @@ func TestCatalogPricingTimeout(t *testing.T) {
 	defer c.Close()
 	start := time.Now()
 	code, body := getJSON(t, "http://"+c.Addr()+"/products/anvil")
-	if code != 503 || body["error"] != "pricing unavailable: timeout" || time.Since(start) > 250*time.Millisecond {
+	if code != http.StatusServiceUnavailable || body["error"] != "pricing unavailable: timeout" || time.Since(start) > 250*time.Millisecond {
 		t.Fatalf("got %d %v after %v", code, body, time.Since(start))
 	}
 }
@@ -138,7 +138,7 @@ func TestMalformedReplies(t *testing.T) {
 			t.Fatal(err)
 		}
 		code, body := getJSON(t, "http://"+c.Addr()+"/products/anvil")
-		if code != 503 || !strings.Contains(fmt.Sprint(body["error"]), "malformed") {
+		if code != http.StatusServiceUnavailable || !strings.Contains(fmt.Sprint(body["error"]), "malformed") {
 			t.Fatalf("reply %q: %d %v", reply, code, body)
 		}
 		_ = c.Close()

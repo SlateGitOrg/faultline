@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,7 +90,7 @@ func TestParseValidAndDefaults(t *testing.T) {
 		s.Safety.FaultTTLGrace.D() != DefaultFaultTTLGrace || s.Safety.MaxDuration.D() != DefaultMaxDuration {
 		t.Fatalf("defaults %+v %+v %+v", s.SteadyState, s.Abort, s.Safety)
 	}
-	if s.Rollback[1].HTTP.Method != "POST" {
+	if s.Rollback[1].HTTP.Method != http.MethodPost {
 		t.Fatal("hook method default")
 	}
 	if s.MethodDuration() != 4*time.Second {
@@ -126,7 +127,7 @@ func TestParseErrors(t *testing.T) {
 	}{
 		{"empty", "", "empty"},
 		{"yaml", "name: [", "parse experiment"},
-		{"unknown field", "name: x\ncontroll: y\n", "unknown field"},
+		{"unknown field", "name: x\ncontrl: y\n", "unknown field"},
 		{"undefined env", "name: ${NOPE}", "NOPE"},
 		{"not object", "- 1\n- 2\n", "parse experiment"},
 	}

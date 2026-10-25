@@ -395,20 +395,3 @@ func TestAbortWindowExtendsToMinSamples(t *testing.T) {
 		t.Fatalf("short history: %d samples", len(got))
 	}
 }
-
-func TestDescribe(t *testing.T) {
-	cases := map[string]fault.Spec{
-		"latency 10ms±2ms downstream": {Type: fault.Latency, Latency: fault.Duration(10 * time.Millisecond), Jitter: fault.Duration(2 * time.Millisecond), Direction: fault.Downstream},
-		"bandwidth 100 B/s":           {Type: fault.Bandwidth, RateBPS: 100},
-		"status 503 p=0.5 scoped":     {Type: fault.Status, Status: 503, Probability: 0.5, Match: &fault.HTTPMatch{}},
-		"close after 10 B":            {Type: fault.Close, AfterBytes: 10},
-		"reset after 1s":              {Type: fault.Reset, Delay: fault.Duration(time.Second)},
-		"corrupt flip":                {Type: fault.Corrupt, Mode: "flip"},
-		"abort":                       {Type: fault.Abort},
-	}
-	for want, f := range cases {
-		if got := describe(f); got != want {
-			t.Fatalf("describe=%q want %q", got, want)
-		}
-	}
-}

@@ -1,0 +1,58 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - perfsprint
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: errorf
+        - name: unused-parameter
+    gosec:
+      excludes:
+        # G404: math/rand is used deliberately for reproducible fault sampling.
+        - G404
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      # Tests spin up loopback servers and use short literal timeouts; their
+      # get() helper closes response bodies, which bodyclose cannot see.
+      - path: _test\.go
+        linters: [bodyclose, gosec, noctx, perfsprint, prealloc, unparam]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/archit2501/faultline
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

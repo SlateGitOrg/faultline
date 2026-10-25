@@ -76,7 +76,7 @@ func Start(cfg Config) (*Proxy, error) {
 	if cfg.DialTimeout <= 0 {
 		cfg.DialTimeout = 5 * time.Second
 	}
-	ln, err := net.Listen("tcp", cfg.Listen)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", cfg.Listen)
 	if err != nil {
 		return nil, fmt.Errorf("tcpproxy %s: listen %s: %w", cfg.Name, cfg.Listen, err)
 	}

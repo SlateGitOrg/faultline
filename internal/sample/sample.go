@@ -50,7 +50,7 @@ func StartPricing(addr string, log *slog.Logger) (*Pricing, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	ln, err := net.Listen("tcp", addr)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("pricing: listen %s: %w", addr, err)
 	}
@@ -160,7 +160,7 @@ func StartCatalog(cfg CatalogConfig) (*Catalog, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
-	ln, err := net.Listen("tcp", cfg.Listen)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", cfg.Listen)
 	if err != nil {
 		return nil, fmt.Errorf("catalog: listen %s: %w", cfg.Listen, err)
 	}

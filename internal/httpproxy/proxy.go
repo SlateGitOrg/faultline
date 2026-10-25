@@ -90,7 +90,7 @@ func Start(cfg Config) (*Proxy, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
-	ln, err := net.Listen("tcp", cfg.Listen)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", cfg.Listen)
 	if err != nil {
 		return nil, fmt.Errorf("httpproxy %s: listen %s: %w", cfg.Name, cfg.Listen, err)
 	}

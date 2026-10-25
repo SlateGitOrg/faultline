@@ -3,6 +3,7 @@ package fault
 import (
 	"encoding/json"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -93,7 +94,7 @@ func TestValidateDefaultsAndErrors(t *testing.T) {
 		t.Fatalf("corrupt defaults: %+v %v", c, err)
 	}
 	m := Spec{Type: Status, Status: 503, Match: &HTTPMatch{Methods: []string{"get"}}}
-	if err := m.Validate(KindHTTP); err != nil || m.Match.Methods[0] != "GET" {
+	if err := m.Validate(KindHTTP); err != nil || m.Match.Methods[0] != http.MethodGet {
 		t.Fatalf("method normalisation: %+v %v", m.Match, err)
 	}
 	for _, typ := range []Type{Reset, Blackhole, Close} {
@@ -149,12 +150,12 @@ func TestDirectionAndSources(t *testing.T) {
 
 func TestMatchesRequest(t *testing.T) {
 	s := Spec{Type: Status, Status: 500, Match: &HTTPMatch{
-		Methods: []string{"GET", "post"}, PathPrefix: "/api", Headers: map[string]string{"X-Canary": "1"},
+		Methods: []string{http.MethodGet, "post"}, PathPrefix: "/api", Headers: map[string]string{"X-Canary": "1"},
 	}, Sources: []string{"192.0.2.0/24"}}
 	if err := s.Validate(KindHTTP); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest("GET", "/api/items", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/items", nil)
 	req.Header.Set("X-Canary", "1")
 	if !s.MatchesRequest(req) {
 		t.Fatal("should match")
@@ -167,17 +168,17 @@ func TestMatchesRequest(t *testing.T) {
 	if s.MatchesRequest(req) {
 		t.Fatal("DELETE should not match")
 	}
-	req.Method = "GET"
+	req.Method = http.MethodGet
 	req.Header.Del("X-Canary")
 	if s.MatchesRequest(req) {
 		t.Fatal("missing header should not match")
 	}
-	req2 := httptest.NewRequest("GET", "/other", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/other", nil)
 	req2.Header.Set("X-Canary", "1")
 	if s.MatchesRequest(req2) {
 		t.Fatal("path should not match")
 	}
-	req3 := httptest.NewRequest("GET", "/api", nil)
+	req3 := httptest.NewRequest(http.MethodGet, "/api", nil)
 	req3.RemoteAddr = "10.0.0.1:1"
 	req3.Header.Set("X-Canary", "1")
 	if s.MatchesRequest(req3) {
@@ -356,5 +357,22 @@ func TestMaxAffectedAndDecider(t *testing.T) {
 	wg.Wait()
 	if got != 5 {
 		t.Fatalf("acquired %d slots, want 5", got)
+	}
+}
+
+func TestDescribe(t *testing.T) {
+	cases := map[string]Spec{
+		"latency 10ms±2ms downstream": {Type: Latency, Latency: Duration(10 * time.Millisecond), Jitter: Duration(2 * time.Millisecond), Direction: Downstream},
+		"bandwidth 100 B/s":           {Type: Bandwidth, RateBPS: 100},
+		"status 503 p=0.5 scoped":     {Type: Status, Status: 503, Probability: 0.5, Match: &HTTPMatch{}},
+		"close after 10 B":            {Type: Close, AfterBytes: 10},
+		"reset after 1s":              {Type: Reset, Delay: Duration(time.Second)},
+		"corrupt flip":                {Type: Corrupt, Mode: "flip"},
+		"abort":                       {Type: Abort},
+	}
+	for want, f := range cases {
+		if got := f.Describe(); got != want {
+			t.Fatalf("describe=%q want %q", got, want)
+		}
 	}
 }
