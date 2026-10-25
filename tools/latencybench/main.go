@@ -121,6 +121,12 @@ func run(quick bool) (*results, error) {
 	if quick {
 		warm = 50
 	}
+	// Warm both paths (scheduler, caches, TCP state) before measuring either.
+	for _, c := range []net.Conn{direct, proxied} {
+		if _, err := rtts(c, warm); err != nil {
+			return nil, err
+		}
+	}
 	baseRTT, err := rtts(direct, warm)
 	if err != nil {
 		return nil, err

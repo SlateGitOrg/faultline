@@ -368,6 +368,9 @@ func TestDescribe(t *testing.T) {
 		"close after 10 B":            {Type: Close, AfterBytes: 10},
 		"reset after 1s":              {Type: Reset, Delay: Duration(time.Second)},
 		"corrupt flip":                {Type: Corrupt, Mode: "flip"},
+		"corrupt flip rate=0.01":      {Type: Corrupt, Mode: "flip", Rate: 0.01},
+		"corrupt truncate after 64 B": {Type: Corrupt, Mode: "truncate", AfterBytes: 64},
+		"reset":                       {Type: Reset, Direction: Downstream},
 		"abort":                       {Type: Abort},
 	}
 	for want, f := range cases {

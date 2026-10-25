@@ -373,8 +373,14 @@ func (f *Spec) Describe() string {
 		}
 	case Corrupt:
 		s += " " + f.Mode
+		switch {
+		case f.Mode == CorruptTruncate:
+			s += fmt.Sprintf(" after %d B", f.AfterBytes)
+		case f.Rate > 0:
+			s += fmt.Sprintf(" rate=%g", f.Rate)
+		}
 	}
-	if f.Direction != "" {
+	if f.Direction != "" && f.Type != Reset {
 		s += " " + string(f.Direction)
 	}
 	if f.Probability > 0 && f.Probability < 1 {

@@ -32,8 +32,8 @@ const (
 	// DefaultAbortConfidence is the confidence with which a success-rate
 	// abort objective must be shown to be breached.
 	DefaultAbortConfidence = 0.95
-	DefaultFaultTTLGrace  = 10 * time.Second
-	DefaultMaxDuration    = 10 * time.Minute
+	DefaultFaultTTLGrace   = 10 * time.Second
+	DefaultMaxDuration     = 10 * time.Minute
 )
 
 // ProxyScheme lets probe targets refer to a proxy by name; the runner
@@ -75,9 +75,9 @@ type Step struct {
 // Abort holds the conditions that stop the experiment early. They are
 // evaluated continuously over a sliding window while faults are active.
 type Abort struct {
-	Window     fault.Duration  `json:"window,omitempty"`
-	MinSamples int             `json:"min_samples,omitempty"`
-	CheckEvery fault.Duration  `json:"check_every,omitempty"`
+	Window     fault.Duration `json:"window,omitempty"`
+	MinSamples int            `json:"min_samples,omitempty"`
+	CheckEvery fault.Duration `json:"check_every,omitempty"`
 	// Confidence is how sure the runner must be that a success-rate abort
 	// objective is breached (one-sided Wilson bound); 0 aborts on the raw
 	// point estimate. Defaults to DefaultAbortConfidence.
