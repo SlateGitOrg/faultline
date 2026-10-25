@@ -47,13 +47,21 @@ faultline proxy: control API: 403 Forbidden: blocked by blast-radius policy: ups
 
 Widen it deliberately for a staging network: `faultline serve --allow-upstream 10.20.0.0/16`.
 
+Proxies themselves also listen on loopback only. A proxy whose `listen`
+address is not a loopback IP or `localhost` (for example `0.0.0.0:7102`,
+`:7102` or a LAN address) is refused with `403` unless the daemon runs with
+`--allow-public-listen`. Without this rule, a proxy to a loopback-only
+upstream (a local database, say) would publish that service to the network,
+and the loopback-only allowlist would not stop it, because loopback is
+exactly what it allows.
+
 ## 2. Who is affected: per-fault scope
 
 | Control | Field | Applies to | Semantics |
 |---|---|---|---|
 | Source scope | `sources: [10.1.2.3, 10.9.0.0/16]` | tcp, http | Only clients whose address is inside the list. Empty = everyone. |
 | Request match | `match: {methods, path_prefix, headers}` | http | All set fields must match (AND); any listed method may match. |
-| Probability | `probability: 0.2` | tcp, http | TCP: decided **once per connection** (a 20 % fault breaks 20 % of connections, not 20 % of every connection's packets). HTTP: per request. |
+| Probability | `probability: 0.2` | tcp, http | TCP: decided **once per connection** (a 20 % fault breaks 20 % of connections, not 20 % of every connection's packets). HTTP: per request. Omitted means 1; an explicit `0` is honoured (the fault never applies), never widened to 1. |
 | Concurrency cap | `max_affected: 3` | tcp, http | At most N connections/requests are affected *at the same time*; slots are released when they finish. |
 | Direction | `direction: upstream\|downstream\|both` | tcp | Which half of the stream the fault acts on. |
 
@@ -136,8 +144,12 @@ always a full rollback.
 ## Checklist before pointing faultline at a shared environment
 
 1. Run `faultline serve` with `FAULTLINE_TOKEN` set; it refuses a
-   non-loopback `--listen` without one.
-2. Set `--allow-upstream` to the narrowest CIDR that contains the target.
+   non-loopback `--listen` without one. Even on loopback, a token is the
+   only protection against other local users and processes (see
+   THREAT_MODEL T9).
+2. Set `--allow-upstream` to the narrowest CIDR that contains the target,
+   and add `--allow-public-listen` only if clients on other hosts must
+   reach the proxies.
 3. Lower `--max-ttl` to the longest experiment you intend to run.
 4. Give every experiment abort objectives, and scope faults with `match`,
    `sources` and `max_affected`.

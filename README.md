@@ -270,7 +270,13 @@ that shape behaviour most:
 - **Faults always die.** Server-side TTL on every fault, derived TTLs in
   experiments, rollback on every exit path, kill switch on daemon shutdown.
 - **Loopback by default.** Upstream allowlist with DNS pinning; the daemon
-  refuses a non-loopback listen address without a token.
+  refuses a non-loopback listen address without a token; proxies listen
+  on loopback unless `--allow-public-listen` is given.
+- **Not drivable from a browser.** The control API refuses requests with an
+  `Origin` or cross-site `Sec-Fetch-Site` header, POSTs that are not
+  `application/json`, and (without a token) any `Host` that is not
+  loopback. A web page therefore cannot use CSRF or DNS rebinding to inject
+  faults or publish local services.
 
 Blast-radius controls are documented in
 [docs/BLAST_RADIUS.md](docs/BLAST_RADIUS.md) and the threat model in
@@ -293,6 +299,8 @@ Blast-radius controls are documented in
   in one process and are lost on restart (faults are cleared on shutdown by
   design); there is no clustering or agent fleet.
 - **Auth is one shared bearer token** without TLS on the control API.
+  Without a token, any local process or user on the machine can drive the
+  daemon; the browser guard only stops web pages.
 - **Probes are simple.** HTTP and TCP request/response probes only; there is
   no integration with Prometheus queries or tracing as steady-state sources.
 - **Small-sample statistics.** Steady-state checks use point estimates over

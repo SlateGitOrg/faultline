@@ -113,3 +113,19 @@ func (e *Engine) checkHTTPUpstream(upstream string) (string, error) {
 	}
 	return u.String(), nil
 }
+
+// IsLoopbackListen reports whether a listen address ("host:port") only
+// accepts local connections. An empty host (":7070") binds every interface,
+// and host names other than "localhost" are refused because they may
+// resolve to anything.
+func IsLoopbackListen(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil || host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.Unmap().IsLoopback()
+}

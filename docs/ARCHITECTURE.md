@@ -169,6 +169,13 @@ Request bodies are decoded with unknown fields rejected and capped at 1 MiB.
 With a token configured, every endpoint except health requires
 `Authorization: Bearer <token>` (constant-time comparison).
 
+Before routing, every request passes a browser guard: a request with an
+`Origin` header or a `Sec-Fetch-Site` other than `none` gets `403`, a POST
+whose `Content-Type` is not `application/json` gets `415`, and, when no
+token is configured, a request whose `Host` is not a loopback IP or
+`localhost` gets `421` (DNS rebinding). The CLI, the experiment runner and
+curl pass all three checks unchanged. See THREAT_MODEL T9.
+
 ## Experiments
 
 ### Lifecycle

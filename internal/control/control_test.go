@@ -154,6 +154,7 @@ func TestErrorMapping(t *testing.T) {
 
 	raw := func(method, path, body string) (int, string) {
 		req, _ := http.NewRequestWithContext(ctx, method, c.Base()+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -173,6 +174,96 @@ func TestErrorMapping(t *testing.T) {
 	}
 	if code, _ := raw("GET", "/v1/audit?since=abc", ""); code != 400 {
 		t.Fatalf("bad since: %d", code)
+	}
+}
+
+// TestBrowserGuard reproduces the review finding: a cross-origin text/plain
+// POST (a CORS "simple" request, sent by browsers without a preflight) used
+// to create a proxy listening on every interface. Each browser signal is
+// now refused on its own, and the CLI's own requests still pass.
+type guardCase struct {
+	name, method, path, body string
+	hdr                      map[string]string
+	want                     int
+}
+
+func TestBrowserGuard(t *testing.T) {
+	for _, token := range []string{"", "s3cret"} {
+		c, up := setup(t, token)
+		ctx := t.Context()
+		send := func(method, path, body string, hdr map[string]string) (int, string) {
+			t.Helper()
+			req, _ := http.NewRequestWithContext(ctx, method, c.Base()+path, strings.NewReader(body))
+			if token != "" {
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
+			for k, v := range hdr {
+				if k == "Host" {
+					req.Host = v
+					continue
+				}
+				req.Header.Set(k, v)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			b, _ := io.ReadAll(resp.Body)
+			return resp.StatusCode, string(b)
+		}
+		port := c.Base()[strings.LastIndex(c.Base(), ":")+1:]
+		create := `{"name":"x","kind":"tcp","listen":"127.0.0.1:0","upstream":"` + up + `"}`
+		jsonCT := map[string]string{"Content-Type": "application/json"}
+
+		// The exact request from the finding.
+		code, body := send("POST", "/v1/proxies", create, map[string]string{
+			"Content-Type": "text/plain", "Origin": "http://evil.example", "Host": "evil.example:" + port,
+		})
+		if code != http.StatusForbidden {
+			t.Fatalf("token=%q: cross-origin simple request: %d %s", token, code, body)
+		}
+		cases := []guardCase{
+			{"origin on json post", "POST", "/v1/proxies", create, map[string]string{"Content-Type": "application/json", "Origin": "http://127.0.0.1:" + port}, 403},
+			{"origin on delete", "DELETE", "/v1/faults", "", map[string]string{"Origin": "null"}, 403},
+			{"origin on get", "GET", "/v1/proxies", "", map[string]string{"Origin": "http://evil.example"}, 403},
+			{"sec-fetch cross-site", "POST", "/v1/killswitch", `{"engaged":false}`, map[string]string{"Content-Type": "application/json", "Sec-Fetch-Site": "cross-site"}, 403},
+			{"text/plain post", "POST", "/v1/killswitch", `{"engaged":false}`, map[string]string{"Content-Type": "text/plain"}, 415},
+			{"form post", "POST", "/v1/proxies", create, map[string]string{"Content-Type": "application/x-www-form-urlencoded"}, 415},
+			{"no content type", "POST", "/v1/proxies", create, nil, 415},
+			{"sec-fetch none (typed URL)", "GET", "/v1/health", "", map[string]string{"Sec-Fetch-Site": "none"}, 200},
+			{"json with charset", "POST", "/v1/killswitch", `{"engaged":false}`, map[string]string{"Content-Type": "application/json; charset=utf-8"}, 200},
+			{"localhost host", "GET", "/v1/proxies", "", map[string]string{"Host": "localhost:" + port}, 200},
+			{"ipv6 loopback host", "GET", "/v1/proxies", "", map[string]string{"Host": "[::1]:" + port}, 200},
+		}
+		rebinding := http.StatusMisdirectedRequest
+		if token != "" {
+			rebinding = http.StatusOK // the token already defeats DNS rebinding
+		}
+		cases = append(cases,
+			guardCase{"dns rebinding host", "GET", "/v1/proxies", "", map[string]string{"Host": "evil.example:" + port}, rebinding},
+			guardCase{"lan ip host", "GET", "/v1/health", "", map[string]string{"Host": "192.168.1.5"}, rebinding},
+		)
+		for _, tc := range cases {
+			if code, body := send(tc.method, tc.path, tc.body, tc.hdr); code != tc.want {
+				t.Errorf("token=%q %s: got %d %s, want %d", token, tc.name, code, body, tc.want)
+			}
+		}
+		// Nothing was created by any refused request; the real client works.
+		if ps, err := c.Proxies(ctx); err != nil || len(ps) != 0 {
+			t.Fatalf("token=%q: refused requests changed state: %+v %v", token, ps, err)
+		}
+		if code, body := send("POST", "/v1/proxies", create, jsonCT); code != http.StatusCreated {
+			t.Fatalf("token=%q: plain JSON client: %d %s", token, code, body)
+		}
+	}
+	for host, want := range map[string]bool{
+		"127.0.0.1": true, "127.0.0.1:7070": true, "[::1]:1": true, "::1": true, "[::1]": true,
+		"LocalHost:9": true, "": false, "evil.example": false, "0.0.0.0:1": false, "10.0.0.1": false,
+	} {
+		if got := loopbackHost(host); got != want {
+			t.Errorf("loopbackHost(%q)=%v", host, got)
+		}
 	}
 }
 

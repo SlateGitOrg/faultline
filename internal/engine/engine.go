@@ -60,6 +60,11 @@ type Options struct {
 	SweepInterval time.Duration
 	// Resolver resolves upstream host names for the allowlist check.
 	Resolver Resolver
+	// AllowPublicListen lets proxies listen on non-loopback addresses.
+	// By default a proxy may only listen on a loopback address, so creating
+	// a proxy can never publish a loopback-only upstream (a local database,
+	// say) to the network.
+	AllowPublicListen bool
 }
 
 // ProxySpec declares a proxy.
@@ -203,6 +208,11 @@ func (e *Engine) CreateProxy(spec ProxySpec) (ProxyInfo, error) {
 	}
 	if spec.Listen == "" {
 		spec.Listen = "127.0.0.1:0"
+	}
+	if !e.opts.AllowPublicListen && !IsLoopbackListen(spec.Listen) {
+		err := fmt.Errorf("%w: proxy listen address %q is not a loopback address; start the daemon with --allow-public-listen to expose proxies on the network", ErrBlocked, spec.Listen)
+		e.audit.Record(Event{Action: "proxy.reject", Proxy: spec.Name, Detail: err.Error()})
+		return ProxyInfo{}, err
 	}
 	var upstream string
 	var err error

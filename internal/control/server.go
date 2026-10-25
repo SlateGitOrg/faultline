@@ -10,7 +10,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
+	"net"
 	"net/http"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,6 +52,12 @@ type errorBody struct {
 }
 
 // HandlerOptions configures the control API.
+//
+// Independently of Token, the handler refuses requests a web browser could
+// forge (see browserGuard): any request with an Origin or a cross-site
+// Sec-Fetch-Site header, POSTs whose Content-Type is not application/json,
+// and, when Token is empty, requests whose Host header is not a loopback
+// address (DNS rebinding).
 type HandlerOptions struct {
 	// Token, when non-empty, is required as "Authorization: Bearer <token>"
 	// on every endpoint except /v1/health.
@@ -83,7 +92,63 @@ func NewHandler(eng *engine.Engine, opts HandlerOptions) http.Handler {
 	mux.HandleFunc("POST /v1/killswitch", s.auth(s.setKill))
 	mux.HandleFunc("GET /v1/audit", s.auth(s.audit))
 	mux.HandleFunc("GET /metrics", s.auth(s.metrics))
-	return mux
+	return s.browserGuard(mux)
+}
+
+// browserGuard rejects requests that a web page in the operator's browser
+// could send to the daemon. Without it, a text/plain POST (a CORS "simple"
+// request, sent cross-origin without a preflight) from any open tab could
+// create proxies, inject faults or release the kill switch on an
+// unauthenticated loopback daemon, and a DNS-rebinding page could also read
+// the responses. faultline's clients (the CLI, the experiment runner, curl)
+// never send Origin or Sec-Fetch-* headers, always send JSON with
+// Content-Type: application/json, and address the daemon by its loopback
+// address, so none of these checks affects them.
+func (s *server) browserGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reject := func(status int, msg string) {
+			s.log.Warn("control request refused", "method", r.Method, "path", r.URL.Path,
+				"status", status, "reason", msg, "origin", r.Header.Get("Origin"), "host", r.Host)
+			writeJSON(w, status, errorBody{Error: msg})
+		}
+		if r.Header.Get("Origin") != "" {
+			reject(http.StatusForbidden, "requests carrying an Origin header are refused: the control API is not for browsers")
+			return
+		}
+		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "none" {
+			reject(http.StatusForbidden, "browser requests (Sec-Fetch-Site: "+site+") are refused: the control API is not for browsers")
+			return
+		}
+		if s.token == "" && !loopbackHost(r.Host) {
+			reject(http.StatusMisdirectedRequest, fmt.Sprintf("Host %q is not a loopback address; an unauthenticated daemon only answers requests addressed to 127.0.0.1, [::1] or localhost", r.Host))
+			return
+		}
+		if r.Method == http.MethodPost {
+			mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if err != nil || mt != "application/json" {
+				reject(http.StatusUnsupportedMediaType, "POST bodies must be sent with Content-Type: application/json")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// loopbackHost reports whether an HTTP Host header ("host" or "host:port")
+// names a loopback address. Only literal loopback IPs and "localhost" are
+// accepted: any other name may resolve anywhere, which is what DNS
+// rebinding exploits.
+func loopbackHost(host string) bool {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	} else {
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.Unmap().IsLoopback()
 }
 
 func (s *server) auth(h http.HandlerFunc) http.HandlerFunc {

@@ -65,7 +65,13 @@ func TestCreateProxyPolicy(t *testing.T) {
 		{ProxySpec{Name: "badurl", Kind: fault.KindHTTP, Upstream: "127.0.0.1:80"}, ErrInvalid},
 		{ProxySpec{Name: "bad name!", Kind: fault.KindTCP, Upstream: up}, ErrInvalid},
 		{ProxySpec{Name: "udp", Kind: "udp", Upstream: up}, ErrInvalid},
-		{ProxySpec{Name: "badlisten", Kind: fault.KindTCP, Listen: "256.0.0.1:1", Upstream: up}, ErrInvalid},
+		{ProxySpec{Name: "badlisten", Kind: fault.KindTCP, Listen: "127.0.0.1:99999", Upstream: up}, ErrInvalid},
+		{ProxySpec{Name: "any-iface", Kind: fault.KindTCP, Listen: "0.0.0.0:0", Upstream: up}, ErrBlocked},
+		{ProxySpec{Name: "empty-host", Kind: fault.KindTCP, Listen: ":0", Upstream: up}, ErrBlocked},
+		{ProxySpec{Name: "lan", Kind: fault.KindHTTP, Listen: "192.168.1.10:0", Upstream: "http://" + up}, ErrBlocked},
+		{ProxySpec{Name: "by-hostname", Kind: fault.KindTCP, Listen: "svc.local:0", Upstream: up}, ErrBlocked},
+		{ProxySpec{Name: "v6-loop", Kind: fault.KindTCP, Listen: "[::1]:0", Upstream: up}, nil},
+		{ProxySpec{Name: "localhost", Kind: fault.KindTCP, Listen: "localhost:0", Upstream: up}, nil},
 	}
 	for _, c := range cases {
 		_, err := e.CreateProxy(c.spec)
@@ -81,10 +87,10 @@ func TestCreateProxyPolicy(t *testing.T) {
 		t.Fatalf("tcp upstream must be pinned to the resolved address: %+v %v", pi, err)
 	}
 	all := e.Proxies()
-	if len(all) != 3 || all[0].Name != "by-name" || all[1].Name != "ok-http" || all[2].Name != "ok-tcp" {
+	if len(all) != 5 || all[0].Name != "by-name" || all[1].Name != "localhost" || all[2].Name != "ok-http" || all[3].Name != "ok-tcp" || all[4].Name != "v6-loop" {
 		t.Fatalf("proxies not sorted: %+v", all)
 	}
-	if all[1].HTTP == nil || all[2].TCP == nil {
+	if all[2].HTTP == nil || all[3].TCP == nil {
 		t.Fatal("stats missing")
 	}
 	if _, err := e.Proxy("missing"); !errors.Is(err, ErrNotFound) {
@@ -104,6 +110,23 @@ func TestCreateProxyPolicy(t *testing.T) {
 	}
 	if rejected < 6 {
 		t.Fatalf("policy rejections not audited: %d", rejected)
+	}
+}
+
+func TestAllowPublicListen(t *testing.T) {
+	e := newEngine(t, Options{AllowPublicListen: true})
+	pi, err := e.CreateProxy(ProxySpec{Name: "pub", Kind: fault.KindTCP, Listen: "0.0.0.0:0", Upstream: listener(t)})
+	if err != nil || pi.Listen == "" {
+		t.Fatalf("AllowPublicListen must permit a non-loopback listen address: %+v %v", pi, err)
+	}
+	for addr, want := range map[string]bool{
+		"127.0.0.1:1": true, "127.9.9.9:1": true, "[::1]:1": true, "localhost:1": true, "LOCALHOST:1": true,
+		"[::ffff:127.0.0.1]:1": true, ":1": false, "0.0.0.0:1": false, "[::]:1": false,
+		"10.0.0.1:1": false, "example.com:1": false, "127.0.0.1": false, "": false,
+	} {
+		if got := IsLoopbackListen(addr); got != want {
+			t.Errorf("IsLoopbackListen(%q)=%v, want %v", addr, got, want)
+		}
 	}
 }
 

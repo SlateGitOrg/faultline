@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -36,17 +35,7 @@ func newLogger(e *env, level, format string) (*slog.Logger, error) {
 
 // isLoopbackListen reports whether a listen address only accepts local
 // connections. An empty host (":7070") binds every interface.
-func isLoopbackListen(addr string) bool {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil || host == "" {
-		return false
-	}
-	if host == "localhost" {
-		return true
-	}
-	ip, err := netip.ParseAddr(host)
-	return err == nil && ip.IsLoopback()
-}
+func isLoopbackListen(addr string) bool { return engine.IsLoopbackListen(addr) }
 
 func serve(ctx context.Context, e *env, args []string) error {
 	fs := newFlags(e, "serve", "[flags]")
@@ -56,6 +45,7 @@ func serve(ctx context.Context, e *env, args []string) error {
 	maxProxies := fs.Int("max-proxies", engine.DefaultMaxProxies, "maximum number of proxies")
 	maxFaults := fs.Int("max-faults", engine.DefaultMaxFaultsPerProxy, "maximum active faults per proxy")
 	seed := fs.Uint64("seed", 0, "seed for fault sampling (0: random); fixes probability and jitter draws")
+	publicListen := fs.Bool("allow-public-listen", false, "let proxies listen on non-loopback addresses (default: loopback only)")
 	addrFile := fs.String("addr-file", "", "write the bound control address to this file once listening")
 	level := fs.String("log-level", "info", "log level: debug, info, warn, error")
 	format := fs.String("log-format", "text", "log format: text or json")
@@ -72,7 +62,7 @@ func serve(ctx context.Context, e *env, args []string) error {
 	}
 	opts := engine.Options{
 		MaxTTL: *maxTTL, MaxProxies: *maxProxies, MaxFaultsPerProxy: *maxFaults,
-		Seed: *seed, Logger: log,
+		Seed: *seed, Logger: log, AllowPublicListen: *publicListen,
 	}
 	if *allow != "" {
 		if opts.AllowUpstreams, err = engine.ParseAllowlist(*allow); err != nil {
@@ -102,7 +92,7 @@ func serve(ctx context.Context, e *env, args []string) error {
 		allowed[i] = p.String()
 	}
 	log.Info("faultline control API listening", "addr", addr, "auth", token != "",
-		"allow_upstream", strings.Join(allowed, ","), "max_ttl", eng.Options().MaxTTL)
+		"allow_upstream", strings.Join(allowed, ","), "allow_public_listen", *publicListen, "max_ttl", eng.Options().MaxTTL)
 
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
