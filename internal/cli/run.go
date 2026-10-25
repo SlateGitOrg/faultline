@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/archit2501/faultline/internal/control"
-	"github.com/archit2501/faultline/internal/experiment"
+	"github.com/SlateGitOrg/faultline/internal/control"
+	"github.com/SlateGitOrg/faultline/internal/experiment"
 )
 
 func runCmd(ctx context.Context, e *env, args []string) error {

@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/archit2501/faultline/internal/cli"
+	"github.com/SlateGitOrg/faultline/internal/cli"
 )
 
 func main() {

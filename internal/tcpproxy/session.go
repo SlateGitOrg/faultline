@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 // chunkSize is the read buffer per direction. Small enough that latency is

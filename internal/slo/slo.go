@@ -9,8 +9,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
-	"github.com/archit2501/faultline/internal/probe"
+	"github.com/SlateGitOrg/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/probe"
 )
 
 // Objective is a service level objective for one probe. Unset fields are

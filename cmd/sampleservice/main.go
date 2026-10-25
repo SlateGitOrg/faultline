@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/archit2501/faultline/internal/sample"
+	"github.com/SlateGitOrg/faultline/internal/sample"
 )
 
 func main() {

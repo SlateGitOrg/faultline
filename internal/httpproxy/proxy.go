@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 // FaultHeader is set on every response a fault acted on, listing the fault

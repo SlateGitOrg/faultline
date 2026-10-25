@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/archit2501/faultline/internal/httpproxy"
+	"github.com/SlateGitOrg/faultline/internal/httpproxy"
 )
 
 // Resolver resolves host names for the upstream allowlist check.

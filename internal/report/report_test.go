@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/faultline/internal/slo"
+	"github.com/SlateGitOrg/faultline/internal/slo"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

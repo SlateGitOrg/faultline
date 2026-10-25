@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 type fakeResolver map[string][]netip.Addr

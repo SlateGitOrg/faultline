@@ -4,7 +4,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 // corruptBody wraps a response body and mangles it as it streams.

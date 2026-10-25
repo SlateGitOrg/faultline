@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/archit2501/faultline/internal/engine"
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/engine"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 // maxBody bounds request bodies; fault specs are tiny.

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
-	"github.com/archit2501/faultline/internal/probe"
+	"github.com/SlateGitOrg/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/probe"
 )
 
 func ms(n int) time.Duration { return time.Duration(n) * time.Millisecond }

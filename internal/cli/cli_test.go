@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/faultline/internal/engine"
-	"github.com/archit2501/faultline/internal/fault"
-	"github.com/archit2501/faultline/internal/sample"
+	"github.com/SlateGitOrg/faultline/internal/engine"
+	"github.com/SlateGitOrg/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/sample"
 )
 
 type result struct {

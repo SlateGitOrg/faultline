@@ -30,9 +30,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
-	"github.com/archit2501/faultline/internal/httpproxy"
-	"github.com/archit2501/faultline/internal/tcpproxy"
+	"github.com/SlateGitOrg/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/httpproxy"
+	"github.com/SlateGitOrg/faultline/internal/tcpproxy"
 )
 
 type latencyRow struct {

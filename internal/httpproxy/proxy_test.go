@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 type upstream struct {

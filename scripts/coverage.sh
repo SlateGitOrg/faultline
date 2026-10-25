@@ -10,7 +10,7 @@ if ! log=$(go test -count=1 -covermode=atomic -coverprofile=coverage.out ./inter
 fi
 # Per-package summary from the profile.
 awk -F'[: ,]+' 'NR > 1 {
-  file = $1; sub(/\/[^\/]*$/, "", file); sub(/^github.com\/archit2501\/faultline\//, "", file)
+  file = $1; sub(/\/[^\/]*$/, "", file); sub(/^github.com\/SlateGitOrg\/faultline\//, "", file)
   stmts[file] += $(NF-1); if ($NF > 0) hit[file] += $(NF-1)
   total += $(NF-1); if ($NF > 0) covered += $(NF-1)
 } END {

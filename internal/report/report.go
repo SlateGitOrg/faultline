@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/archit2501/faultline/internal/slo"
+	"github.com/SlateGitOrg/faultline/internal/slo"
 )
 
 // Verdict is the overall outcome of an experiment.

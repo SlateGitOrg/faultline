@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/archit2501/faultline/internal/control"
-	"github.com/archit2501/faultline/internal/engine"
+	"github.com/SlateGitOrg/faultline/internal/control"
+	"github.com/SlateGitOrg/faultline/internal/engine"
 )
 
 // shutdownTimeout bounds the graceful stop of the control API.

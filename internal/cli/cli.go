@@ -17,7 +17,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/archit2501/faultline/internal/control"
+	"github.com/SlateGitOrg/faultline/internal/control"
 )
 
 // Environment variables read by the CLI.

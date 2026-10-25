@@ -1,4 +1,4 @@
-module github.com/archit2501/faultline
+module github.com/SlateGitOrg/faultline
 
 go 1.27
 

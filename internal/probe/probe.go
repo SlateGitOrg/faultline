@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 // DefaultTimeout bounds a probe when its spec sets none.

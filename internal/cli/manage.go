@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/archit2501/faultline/internal/engine"
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/engine"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 func proxyCmd(ctx context.Context, e *env, args []string) error {

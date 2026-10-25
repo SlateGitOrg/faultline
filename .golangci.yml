@@ -51,7 +51,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/archit2501/faultline
+        - github.com/SlateGitOrg/faultline
 
 issues:
   max-issues-per-linter: 0

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 // startEcho runs a TCP echo server that half-closes after the client does.

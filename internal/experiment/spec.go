@@ -17,10 +17,10 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/archit2501/faultline/internal/engine"
-	"github.com/archit2501/faultline/internal/fault"
-	"github.com/archit2501/faultline/internal/probe"
-	"github.com/archit2501/faultline/internal/slo"
+	"github.com/SlateGitOrg/faultline/internal/engine"
+	"github.com/SlateGitOrg/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/probe"
+	"github.com/SlateGitOrg/faultline/internal/slo"
 )
 
 // Defaults applied by Validate.

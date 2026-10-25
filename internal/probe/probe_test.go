@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 func mustProber(t *testing.T, s Spec) Prober {

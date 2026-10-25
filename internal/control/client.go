@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/archit2501/faultline/internal/engine"
-	"github.com/archit2501/faultline/internal/fault"
+	"github.com/SlateGitOrg/faultline/internal/engine"
+	"github.com/SlateGitOrg/faultline/internal/fault"
 )
 
 // APIError is a non-2xx response from the control API.
