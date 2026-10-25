@@ -1,0 +1,65 @@
+# Hypothesis: clients of the catalog see >= 95% success even if the edge
+# returns 503 for 20% of requests. They do not (there is no retry layer),
+# so the hypothesis is falsified while the abort guard (50%) is not hit.
+# Expected verdict: failed.
+name: edge-errors-falsified
+description: 20% injected 503s at the edge falsify a 95% success objective.
+control: ${FAULTLINE_CONTROL:-127.0.0.1:7070}
+
+proxies:
+  - name: pricing
+    kind: tcp
+    listen: ${PRICING_PROXY_ADDR:-127.0.0.1:7102}
+    upstream: ${PRICING_ADDR:-127.0.0.1:7101}
+  - name: edge
+    kind: http
+    upstream: http://${CATALOG_ADDR:-127.0.0.1:7100}
+
+probes:
+  - name: catalog
+    timeout: 1s
+    http:
+      url: proxy://edge/products
+  - name: anvil
+    timeout: 1s
+    http:
+      url: proxy://edge/products/anvil
+      body_contains: "4999"
+
+steady_state:
+  duration: 1500ms
+  interval: 50ms
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.95
+    - probe: anvil
+      min_success_rate: 0.95
+
+method:
+  - name: edge-503s
+    proxy: edge
+    duration: 3s
+    faults:
+      # Scoped to GETs under /products: both probes are in the blast
+      # radius, the /healthz endpoint is not.
+      - type: status
+        status: 503
+        probability: 0.2
+        body: '{"error":"injected by faultline"}'
+        response_headers:
+          Content-Type: application/json
+          Retry-After: "1"
+        match:
+          methods: [GET]
+          path_prefix: /products
+      # Single-product lookups (but not the list) also get 20ms slower.
+      - type: delay
+        latency: 20ms
+        match:
+          path_prefix: /products/
+
+abort:
+  window: 1s
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.5

@@ -1,0 +1,51 @@
+# Hypothesis: the catalog API stays within its SLO when its pricing
+# dependency gets 60ms±20ms slower, because its 250ms pricing timeout leaves
+# enough headroom. Expected verdict: passed.
+name: pricing-latency-tolerated
+description: Catalog tolerates a 60ms±20ms slowdown of the pricing backend.
+control: ${FAULTLINE_CONTROL:-127.0.0.1:7070}
+
+proxies:
+  # L4 proxy the catalog dials instead of pricing directly (sampleservice
+  # --pricing-addr points here).
+  - name: pricing
+    kind: tcp
+    listen: ${PRICING_PROXY_ADDR:-127.0.0.1:7102}
+    upstream: ${PRICING_ADDR:-127.0.0.1:7101}
+  # L7 proxy in front of the catalog; probes go through it.
+  - name: edge
+    kind: http
+    upstream: http://${CATALOG_ADDR:-127.0.0.1:7100}
+
+probes:
+  - name: catalog
+    timeout: 1s
+    http:
+      url: proxy://edge/products
+      expect_status: [200]
+      body_contains: '"sku":"anvil"'
+
+steady_state:
+  duration: 1500ms
+  interval: 50ms
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.95
+      max_p95: 200ms
+
+method:
+  - name: slow-pricing
+    proxy: pricing
+    duration: 3s
+    faults:
+      - type: latency
+        latency: 60ms
+        jitter: 20ms
+        direction: downstream
+
+abort:
+  window: 1s
+  min_samples: 5
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.5

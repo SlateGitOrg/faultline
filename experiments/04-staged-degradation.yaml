@@ -1,0 +1,54 @@
+# A staged L4 + L7 scenario: pricing connections are reset for 30% of
+# connections, then (overlapping) the edge corrupts 1% of response bytes.
+# The catalog surfaces resets as 503s and corrupted JSON fails the body
+# check. Expected verdict: failed (hypothesis deviates), system recovers.
+name: staged-degradation
+description: Pricing resets followed by response-body corruption at the edge.
+control: ${FAULTLINE_CONTROL:-127.0.0.1:7070}
+
+proxies:
+  - name: pricing
+    kind: tcp
+    listen: ${PRICING_PROXY_ADDR:-127.0.0.1:7102}
+    upstream: ${PRICING_ADDR:-127.0.0.1:7101}
+  - name: edge
+    kind: http
+    upstream: http://${CATALOG_ADDR:-127.0.0.1:7100}
+
+probes:
+  - name: catalog
+    timeout: 1s
+    http:
+      url: proxy://edge/products
+      body_contains: '"price_cents":129900'
+
+steady_state:
+  duration: 1500ms
+  interval: 50ms
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.9
+      max_p99: 300ms
+
+method:
+  - name: pricing-resets
+    proxy: pricing
+    duration: 2s
+    faults:
+      - type: reset
+        probability: 0.3
+        max_affected: 2
+  - name: edge-corruption
+    proxy: edge
+    at: 1s
+    duration: 2s
+    faults:
+      - type: corrupt
+        mode: flip
+        rate: 0.01
+
+abort:
+  window: 1s
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.3

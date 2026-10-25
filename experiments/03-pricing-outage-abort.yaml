@@ -1,0 +1,60 @@
+# A 400ms pricing slowdown exceeds the catalog's 250ms pricing timeout, so
+# every catalog request fails. The schedule asks for 60s of this; the abort
+# condition (success rate < 80% over 1s) must stop it within about a second
+# and roll the fault back. Expected verdict: aborted, then recovered.
+name: pricing-outage-abort
+description: A latency spike beyond the catalog's timeout trips the abort guard long before the 60s schedule ends.
+control: ${FAULTLINE_CONTROL:-127.0.0.1:7070}
+
+proxies:
+  - name: pricing
+    kind: tcp
+    listen: ${PRICING_PROXY_ADDR:-127.0.0.1:7102}
+    upstream: ${PRICING_ADDR:-127.0.0.1:7101}
+  - name: edge
+    kind: http
+    upstream: http://${CATALOG_ADDR:-127.0.0.1:7100}
+
+probes:
+  - name: catalog
+    timeout: 1s
+    http:
+      url: proxy://edge/products
+  - name: pricing-direct
+    timeout: 1s
+    tcp:
+      address: proxy://pricing
+      send: "PING\n"
+      expect: PONG
+
+steady_state:
+  duration: 1500ms
+  interval: 50ms
+  recovery_grace: 500ms
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.95
+      max_p95: 200ms
+
+method:
+  - name: pricing-latency-spike
+    proxy: pricing
+    duration: 60s
+    faults:
+      - type: latency
+        latency: 400ms
+
+abort:
+  window: 1s
+  min_samples: 4
+  check_every: 100ms
+  objectives:
+    - probe: catalog
+      min_success_rate: 0.8
+
+rollback:
+  - clear_faults: pricing
+
+safety:
+  fault_ttl_grace: 5s
+  max_duration: 2m
