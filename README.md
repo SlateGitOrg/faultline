@@ -226,21 +226,22 @@ under `-race`, and a coverage gate of 80 % on `internal/...`. The same gate
 runs in `.github/workflows/ci.yml` (not yet executed: the repository has
 not been pushed), followed by `make demo`.
 
-Coverage from `./scripts/coverage.sh` (run by `make check`):
+Coverage from `./scripts/coverage.sh` (run by `make check`; this output is
+from the fresh-clone verification run):
 
 ```text
 internal/cli             95.6%  (451/472 statements)
 internal/control         98.3%  (229/233 statements)
 internal/engine          98.5%  (270/274 statements)
 internal/experiment      94.6%  (524/554 statements)
-internal/fault           98.5%  (267/271 statements)
+internal/fault           98.5%  (270/274 statements)
 internal/httpproxy       96.6%  (143/148 statements)
 internal/probe           96.5%  (139/144 statements)
 internal/report          96.1%  (122/127 statements)
 internal/sample          96.7%  (119/123 statements)
 internal/slo             97.9%  (95/97 statements)
 internal/tcpproxy        93.8%  (243/259 statements)
-TOTAL                    96.3%  (2602/2702 statements)
+TOTAL                    96.3%  (2605/2705 statements)
 ```
 
 102 test functions (`grep -h '^func Test' internal/*/*_test.go | wc -l`)
