@@ -247,24 +247,39 @@ func Classify(err error) string {
 	return "error"
 }
 
-// Recorder collects samples from concurrently running probes.
+// Recorder collects samples from concurrently running probes and labels
+// each with the phase that was current when the probe *started*. Labelling
+// by start time matters: a probe that was sent while a fault was active
+// and completes just after rollback belongs to the fault phase, not to the
+// recovery phase it happens to finish in.
 type Recorder struct {
 	mu      sync.Mutex
-	phase   string
+	marks   []phaseMark
 	samples []Sample
 }
 
-// SetPhase labels subsequently recorded samples.
+type phaseMark struct {
+	at   time.Time
+	name string
+}
+
+// SetPhase starts phase p now.
 func (r *Recorder) SetPhase(p string) {
 	r.mu.Lock()
-	r.phase = p
+	r.marks = append(r.marks, phaseMark{at: time.Now(), name: p})
 	r.mu.Unlock()
 }
 
-// Add records a sample under the current phase.
+// Add records a sample under the phase current at its start time.
 func (r *Recorder) Add(s Sample) {
 	r.mu.Lock()
-	s.Phase = r.phase
+	s.Phase = ""
+	for i := len(r.marks) - 1; i >= 0; i-- {
+		if !s.At.Before(r.marks[i].at) {
+			s.Phase = r.marks[i].name
+			break
+		}
+	}
 	r.samples = append(r.samples, s)
 	r.mu.Unlock()
 }

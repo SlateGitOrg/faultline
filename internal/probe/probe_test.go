@@ -245,3 +245,21 @@ func TestRunAndRecorder(t *testing.T) {
 		t.Fatalf("phases: warm=%d main=%d all=%d", len(warm), len(main), len(all))
 	}
 }
+
+func TestRecorderLabelsByStartTime(t *testing.T) {
+	rec := &Recorder{}
+	early := time.Now().Add(-time.Hour)
+	rec.Add(Sample{Probe: "p", At: early})
+	rec.SetPhase("fault")
+	inFlight := time.Now()
+	rec.SetPhase("recovery")
+	rec.Add(Sample{Probe: "p", At: inFlight}) // finished after the phase changed
+	rec.Add(Sample{Probe: "p", At: time.Now()})
+	got := []string{}
+	for _, s := range rec.All() {
+		got = append(got, s.Phase)
+	}
+	if strings.Join(got, ",") != ",fault,recovery" {
+		t.Fatalf("phases %q", got)
+	}
+}
