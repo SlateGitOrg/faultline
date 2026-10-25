@@ -7,7 +7,9 @@
 //     distribution it should follow;
 //   - L7 delay: added request latency through the HTTP proxy;
 //   - L4 bandwidth: achieved throughput for a range of rate caps;
-//   - proxy overhead: round trip and bulk throughput with no faults.
+//   - proxy overhead: round trip and bulk throughput with no faults;
+//   - host timer overshoot: how late a bare time.Timer of the same duration
+//     fires, which bounds the accuracy any user-space injector can reach.
 //
 // It prints Markdown tables (the README's accuracy section is produced by
 // `make bench`). Numbers depend on the machine and its load.
@@ -40,6 +42,7 @@ type latencyRow struct {
 	MedianAdded float64 `json:"median_added_ms"`
 	P99Added    float64 `json:"p99_added_ms"`
 	MedianError float64 `json:"median_error_ms"`
+	TimerSlack  float64 `json:"host_timer_overshoot_ms"`
 }
 
 type bandwidthRow struct {
@@ -134,6 +137,10 @@ func run(quick bool) (*results, error) {
 	if quick {
 		configs = []time.Duration{5 * time.Millisecond, 50 * time.Millisecond}
 	}
+	slack := map[time.Duration]float64{}
+	for _, d := range configs {
+		slack[d] = ms(timerOvershoot(d, min(samplesFor(d, quick), 40)))
+	}
 	for _, want := range configs {
 		n := samplesFor(want, quick)
 		var row latencyRow
@@ -145,6 +152,7 @@ func run(quick bool) (*results, error) {
 		if err != nil {
 			return nil, err
 		}
+		row.TimerSlack = slack[want]
 		res.Latency = append(res.Latency, row)
 	}
 
@@ -156,6 +164,9 @@ func run(quick bool) (*results, error) {
 	httpRows, err := measureHTTP(configs, quick)
 	if err != nil {
 		return nil, err
+	}
+	for i := range httpRows {
+		httpRows[i].TimerSlack = slack[time.Duration(httpRows[i].ConfiguredM*float64(time.Millisecond))]
 	}
 	res.Latency = append(res.Latency, httpRows...)
 
@@ -176,6 +187,21 @@ func run(quick bool) (*results, error) {
 		res.Bandwidth = append(res.Bandwidth, row)
 	}
 	return res, nil
+}
+
+// timerOvershoot is the median lateness of a bare timer of duration d.
+func timerOvershoot(d time.Duration, n int) time.Duration {
+	if d == 0 {
+		return 0
+	}
+	late := make([]time.Duration, 0, n)
+	for range n {
+		start := time.Now()
+		t := time.NewTimer(d)
+		<-t.C
+		late = append(late, time.Since(start)-d)
+	}
+	return median(late)
 }
 
 // samplesFor keeps each configuration to roughly three seconds.
@@ -453,10 +479,10 @@ func printMarkdown(r *results) {
 		r.BaseRTTUS, r.ProxyRTTUS, r.DirectMBps, r.ProxyMBps)
 	fmt.Println("Injected latency accuracy (added = measured − no-fault median through the same proxy):")
 	fmt.Println()
-	fmt.Println("| Layer | Configured | Samples | Median added | p99 added | Median error |")
-	fmt.Println("|---|---:|---:|---:|---:|---:|")
+	fmt.Println("| Layer | Configured | Samples | Median added | p99 added | Median error | Host timer overshoot |")
+	fmt.Println("|---|---:|---:|---:|---:|---:|---:|")
 	for _, l := range r.Latency {
-		fmt.Printf("| %s | %.0f ms | %d | %.2f ms | %.2f ms | %+.2f ms |\n", l.Layer, l.ConfiguredM, l.Samples, l.MedianAdded, l.P99Added, l.MedianError)
+		fmt.Printf("| %s | %.0f ms | %d | %.2f ms | %.2f ms | %+.2f ms | %+.2f ms |\n", l.Layer, l.ConfiguredM, l.Samples, l.MedianAdded, l.P99Added, l.MedianError, l.TimerSlack)
 	}
 	j := r.Jitter
 	fmt.Printf("\nJitter (L4, %.0f ms ± %.0f ms, %d samples): added latency min %.1f / mean %.1f / max %.1f ms; std dev %.2f ms (uniform expectation %.2f ms).\n\n",
