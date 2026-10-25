@@ -419,3 +419,27 @@ func TestPacerRate(t *testing.T) {
 		t.Fatal("short write")
 	}
 }
+
+func TestResetProbabilityAndCap(t *testing.T) {
+	p, set := startProxy(t, startEcho(t), 42)
+	addFault(t, set, fault.Spec{Type: fault.Reset, Probability: 0.3, MaxAffected: 2})
+	reset := 0
+	const n = 200
+	for range n {
+		c, err := net.Dial("tcp", p.Addr())
+		if err != nil {
+			reset++ // reset before the handshake completed on the client side
+			continue
+		}
+		_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+		_, _ = c.Write([]byte("ping\n"))
+		if _, err := io.ReadFull(c, make([]byte, 5)); err != nil {
+			reset++
+		}
+		_ = c.Close()
+	}
+	t.Logf("probability 0.3 reset %d/%d connections", reset, n)
+	if reset < n*20/100 || reset > n*40/100 {
+		t.Fatalf("probability 0.3 reset %d/%d connections", reset, n)
+	}
+}

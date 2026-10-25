@@ -25,12 +25,15 @@ const DefaultTimeout = 2 * time.Second
 
 // Sample is one probe observation.
 type Sample struct {
-	Probe   string        `json:"probe"`
-	Phase   string        `json:"phase"`
-	At      time.Time     `json:"at"`
-	Latency time.Duration `json:"latency_ns"`
-	OK      bool          `json:"ok"`
-	Err     string        `json:"err,omitempty"`
+	Probe string `json:"probe"`
+	Phase string `json:"phase"`
+	// EndPhase is the phase current when the probe completed; it differs
+	// from Phase for probes that straddled a phase boundary.
+	EndPhase string        `json:"end_phase,omitempty"`
+	At       time.Time     `json:"at"`
+	Latency  time.Duration `json:"latency_ns"`
+	OK       bool          `json:"ok"`
+	Err      string        `json:"err,omitempty"`
 }
 
 // HTTPSpec probes an HTTP endpoint.
@@ -273,7 +276,10 @@ func (r *Recorder) SetPhase(p string) {
 // Add records a sample under the phase current at its start time.
 func (r *Recorder) Add(s Sample) {
 	r.mu.Lock()
-	s.Phase = ""
+	s.Phase, s.EndPhase = "", ""
+	if n := len(r.marks); n > 0 {
+		s.EndPhase = r.marks[n-1].name
+	}
 	for i := len(r.marks) - 1; i >= 0; i-- {
 		if !s.At.Before(r.marks[i].at) {
 			s.Phase = r.marks[i].name

@@ -29,6 +29,9 @@ const (
 	DefaultInterval       = 200 * time.Millisecond
 	DefaultAbortWindow    = 2 * time.Second
 	DefaultMinSamples     = 5
+	// DefaultAbortConfidence is the confidence with which a success-rate
+	// abort objective must be shown to be breached.
+	DefaultAbortConfidence = 0.95
 	DefaultFaultTTLGrace  = 10 * time.Second
 	DefaultMaxDuration    = 10 * time.Minute
 )
@@ -75,6 +78,10 @@ type Abort struct {
 	Window     fault.Duration  `json:"window,omitempty"`
 	MinSamples int             `json:"min_samples,omitempty"`
 	CheckEvery fault.Duration  `json:"check_every,omitempty"`
+	// Confidence is how sure the runner must be that a success-rate abort
+	// objective is breached (one-sided Wilson bound); 0 aborts on the raw
+	// point estimate. Defaults to DefaultAbortConfidence.
+	Confidence *float64        `json:"confidence,omitempty"`
 	Objectives []slo.Objective `json:"objectives,omitempty"`
 }
 
@@ -297,6 +304,13 @@ func (s *Spec) Validate() error {
 	}
 	if ab.CheckEvery == 0 {
 		ab.CheckEvery = ss.Interval
+	}
+	if ab.Confidence == nil {
+		c := DefaultAbortConfidence
+		ab.Confidence = &c
+	}
+	if *ab.Confidence < 0 || *ab.Confidence >= 1 {
+		bad("abort: confidence must be within [0,1)")
 	}
 	if ab.Window < 0 || ab.CheckEvery < 0 || ab.MinSamples < 0 {
 		bad("abort: window, check_every and min_samples must not be negative")

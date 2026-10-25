@@ -139,6 +139,49 @@ func Evaluate(o Objective, st Stats) []Check {
 	return out
 }
 
+// WilsonUpper is the upper end of the one-sided Wilson score interval for
+// a binomial success rate at the given confidence (for example 0.95). It
+// answers "how high could the true success rate plausibly be, given
+// successes out of n?". With confidence <= 0 it is the point estimate, and
+// with no samples it is 1 (nothing has been shown).
+func WilsonUpper(successes, n int, confidence float64) float64 {
+	if n <= 0 {
+		return 1
+	}
+	p := float64(successes) / float64(n)
+	if confidence <= 0 {
+		return p
+	}
+	z := math.Sqrt2 * math.Erfinv(2*confidence-1)
+	nn, z2 := float64(n), z*z
+	centre := p + z2/(2*nn)
+	margin := z * math.Sqrt(p*(1-p)/nn+z2/(4*nn*nn))
+	return math.Min(1, (centre+margin)/(1+z2/nn))
+}
+
+// EvaluateAbort is Evaluate for abort conditions. A success-rate breach
+// only counts when it is statistically significant: the check fails when
+// even the upper confidence bound of the observed rate is below the
+// objective. A handful of unlucky samples under a probabilistic fault
+// therefore does not abort a run, while a hard outage (0 of 4 at a 0.8
+// objective) still does. Latency checks are unchanged. confidence <= 0
+// falls back to the point estimate.
+func EvaluateAbort(o Objective, st Stats, confidence float64) []Check {
+	checks := Evaluate(o, st)
+	if confidence <= 0 || o.MinSuccessRate == nil {
+		return checks
+	}
+	for i := range checks {
+		if checks[i].Metric != "success_rate" {
+			continue
+		}
+		ub := WilsonUpper(st.Successes, st.Count, confidence)
+		checks[i].Pass = st.Count > 0 && ub >= *o.MinSuccessRate
+		checks[i].Got += fmt.Sprintf(", %g%% upper bound %.3f", 100*confidence, ub)
+	}
+	return checks
+}
+
 // AllPass reports whether every check passed.
 func AllPass(checks []Check) bool {
 	for _, c := range checks {

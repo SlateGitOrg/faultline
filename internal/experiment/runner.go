@@ -273,7 +273,7 @@ func (x *run) observe(ctx context.Context, phase string, d time.Duration) (repor
 func (x *run) summarize(phase string, start, end time.Time) report.Phase {
 	ph := report.Phase{Name: phase, Start: start, End: end}
 	for _, p := range x.spec.Probes {
-		samples := x.rec.Select(func(s probe.Sample) bool { return s.Phase == phase && s.Probe == p.Name })
+		samples := x.rec.Select(func(s probe.Sample) bool { return attributed(s) == phase && s.Probe == p.Name })
 		ph.Probes = append(ph.Probes, report.ProbeStats{Probe: p.Name, Stats: slo.Summarize(samples)})
 	}
 	if phase != PhaseRecovery {
@@ -299,6 +299,17 @@ func (x *run) phase(name string) report.Phase {
 		}
 	}
 	return report.Phase{Name: name}
+}
+
+// attributed is the phase a sample counts towards: the phase it started
+// in, except that a probe sent just before injection that completed during
+// the method overlapped the faults and counts as a method sample. (Probes
+// that start during the method count there by start time.)
+func attributed(s probe.Sample) string {
+	if s.Phase == PhaseBefore && s.EndPhase == PhaseMethod {
+		return PhaseMethod
+	}
+	return s.Phase
 }
 
 func statsFor(ph report.Phase, probe string) slo.Stats {
@@ -383,12 +394,12 @@ func (x *run) monitor(ctx context.Context, start time.Time, abort func(string, [
 			breached := false
 			for _, o := range ab.Objectives {
 				samples := abortWindow(x.rec.Select(func(s probe.Sample) bool {
-					return s.Phase == PhaseMethod && s.Probe == o.Probe
+					return attributed(s) == PhaseMethod && s.Probe == o.Probe
 				}), from, ab.MinSamples)
 				if len(samples) < ab.MinSamples {
 					continue // not enough evidence in the window yet
 				}
-				cs := slo.Evaluate(o, slo.Summarize(samples))
+				cs := slo.EvaluateAbort(o, slo.Summarize(samples), *ab.Confidence)
 				checks = append(checks, cs...)
 				if !slo.AllPass(cs) {
 					breached = true

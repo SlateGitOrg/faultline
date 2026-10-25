@@ -1,6 +1,7 @@
 package slo
 
 import (
+	"math"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -158,5 +159,56 @@ func TestRound(t *testing.T) {
 		if got := Round(in); got != want {
 			t.Fatalf("Round(%v)=%v want %v", in, got, want)
 		}
+	}
+}
+
+func TestWilsonUpper(t *testing.T) {
+	cases := []struct {
+		s, n int
+		conf float64
+		want float64
+	}{
+		{0, 0, 0.95, 1},
+		{3, 4, 0, 0.75},
+		{0, 4, 0.95, 0.4035}, // hard outage: plausibly at most ~40%
+		{2, 5, 0.95, 0.7277},
+		{50, 50, 0.95, 1},
+		{90, 100, 0.95, 0.9395},
+	}
+	for _, c := range cases {
+		if got := WilsonUpper(c.s, c.n, c.conf); math.Abs(got-c.want) > 0.001 {
+			t.Errorf("WilsonUpper(%d,%d,%v)=%.4f want %.4f", c.s, c.n, c.conf, got, c.want)
+		}
+	}
+	// Property: the bound never falls below the point estimate and shrinks
+	// towards it as n grows.
+	prev := 1.0
+	for n := 10; n <= 10000; n *= 10 {
+		ub := WilsonUpper(n/2, n, 0.95)
+		if ub < 0.5 || ub > prev {
+			t.Fatalf("n=%d ub=%v prev=%v", n, ub, prev)
+		}
+		prev = ub
+	}
+}
+
+func TestEvaluateAbort(t *testing.T) {
+	half := 0.5
+	o := Objective{Probe: "p", MinSuccessRate: &half, MaxP95: 0}
+	// 2/5 is below 0.5 but not significantly: no abort.
+	if cs := EvaluateAbort(o, Stats{Count: 5, Successes: 2, SuccessRate: 0.4}, 0.95); !AllPass(cs) || !strings.Contains(cs[0].Got, "95% upper bound 0.728") {
+		t.Fatalf("%+v", cs)
+	}
+	// 0/8 is a significant breach.
+	if cs := EvaluateAbort(o, Stats{Count: 8}, 0.95); AllPass(cs) {
+		t.Fatalf("%+v", cs)
+	}
+	// Point estimate when confidence is 0, and latency-only objectives are untouched.
+	if cs := EvaluateAbort(o, Stats{Count: 5, Successes: 2, SuccessRate: 0.4}, 0); AllPass(cs) {
+		t.Fatalf("%+v", cs)
+	}
+	lat := Objective{Probe: "p", MaxP95: fault.Duration(time.Millisecond)}
+	if cs := EvaluateAbort(lat, Stats{Count: 5, P95: time.Second}, 0.95); AllPass(cs) {
+		t.Fatalf("%+v", cs)
 	}
 }

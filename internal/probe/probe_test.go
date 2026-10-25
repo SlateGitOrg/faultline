@@ -262,4 +262,7 @@ func TestRecorderLabelsByStartTime(t *testing.T) {
 	if strings.Join(got, ",") != ",fault,recovery" {
 		t.Fatalf("phases %q", got)
 	}
+	if all := rec.All(); all[1].EndPhase != "recovery" || all[2].EndPhase != "recovery" {
+		t.Fatalf("end phases %+v", all)
+	}
 }

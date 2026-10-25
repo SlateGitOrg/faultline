@@ -395,3 +395,16 @@ func TestAbortWindowExtendsToMinSamples(t *testing.T) {
 		t.Fatalf("short history: %d samples", len(got))
 	}
 }
+
+func TestAttributedPhase(t *testing.T) {
+	for _, c := range []struct{ start, end, want string }{
+		{PhaseBefore, PhaseBefore, PhaseBefore},
+		{PhaseBefore, PhaseMethod, PhaseMethod}, // sent before injection, answered during it
+		{PhaseMethod, PhaseAfter, PhaseMethod},
+		{PhaseRecovery, PhaseAfter, PhaseRecovery},
+	} {
+		if got := attributed(probe.Sample{Phase: c.start, EndPhase: c.end}); got != c.want {
+			t.Errorf("%s->%s attributed to %s", c.start, c.end, got)
+		}
+	}
+}

@@ -87,7 +87,8 @@ func TestParseValidAndDefaults(t *testing.T) {
 	}
 	if s.SteadyState.Interval.D() != DefaultInterval || s.Abort.Window.D() != DefaultAbortWindow ||
 		s.Abort.MinSamples != DefaultMinSamples || s.Abort.CheckEvery != s.SteadyState.Interval ||
-		s.Safety.FaultTTLGrace.D() != DefaultFaultTTLGrace || s.Safety.MaxDuration.D() != DefaultMaxDuration {
+		s.Safety.FaultTTLGrace.D() != DefaultFaultTTLGrace || s.Safety.MaxDuration.D() != DefaultMaxDuration ||
+		*s.Abort.Confidence != DefaultAbortConfidence {
 		t.Fatalf("defaults %+v %+v %+v", s.SteadyState, s.Abort, s.Safety)
 	}
 	if s.Rollback[1].HTTP.Method != http.MethodPost {
@@ -172,6 +173,7 @@ method:
         ttl: 1s
 abort:
   window: -1s
+  confidence: 1
   objectives:
     - probe: missing
       max_p95: 1s
@@ -195,7 +197,7 @@ safety:
 		"at must not be negative", "at least one fault", "cannot be applied to a tcp proxy", "ttl is derived",
 		"unknown probe \"missing\"", "sets no threshold", "exactly one of clear_faults or http",
 		"unknown proxy \"nowhere\"", "http.url must be http(s)", "safety: durations", "longer than max_duration",
-		"abort: window",
+		"abort: window", "confidence must be within [0,1)",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("missing error %q in:\n%v", want, err)
@@ -218,6 +220,23 @@ func TestResolveAndDialable(t *testing.T) {
 	for in, want := range cases {
 		if got := dialable(in); got != want {
 			t.Fatalf("dialable(%q)=%q", in, got)
+		}
+	}
+}
+
+// TestBundledExperimentsValidate keeps the shipped examples loadable.
+func TestBundledExperimentsValidate(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join("..", "..", "experiments", "*.yaml"))
+	if err != nil || len(files) < 4 {
+		t.Fatalf("bundled experiments: %v %v", files, err)
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Parse(b, env(nil)); err != nil {
+			t.Errorf("%s: %v", f, err)
 		}
 	}
 }

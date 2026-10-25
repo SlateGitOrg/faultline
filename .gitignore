@@ -5,3 +5,4 @@ coverage.out
 coverage.html
 *.test
 .DS_Store
+/faultline-reports/
