@@ -207,10 +207,16 @@ func isReset(err error) bool {
 func TestResetOnAccept(t *testing.T) {
 	p, set := startProxy(t, startEcho(t), 1)
 	addFault(t, set, fault.Spec{Type: fault.Reset})
-	c := dial(t, p.Addr())
-	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, _ = c.Write([]byte("hello"))
-	_, err := c.Read(make([]byte, 8))
+	// The RST is sent right after accept, so on a loaded host it can reach
+	// the client before connect() returns; a reset at dial time is the
+	// same observation as a reset on the first read.
+	c, err := net.DialTimeout("tcp", p.Addr(), 2*time.Second)
+	if err == nil {
+		t.Cleanup(func() { _ = c.Close() })
+		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, _ = c.Write([]byte("hello"))
+		_, err = c.Read(make([]byte, 8))
+	}
 	if !isReset(err) {
 		t.Fatalf("want connection reset, got %v", err)
 	}
