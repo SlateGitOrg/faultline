@@ -177,7 +177,7 @@ func TestErrorMapping(t *testing.T) {
 	}
 }
 
-// TestBrowserGuard reproduces the review finding: a cross-origin text/plain
+// TestBrowserGuard covers the case where a cross-origin text/plain
 // POST (a CORS "simple" request, sent by browsers without a preflight) used
 // to create a proxy listening on every interface. Each browser signal is
 // now refused on its own, and the CLI's own requests still pass.
